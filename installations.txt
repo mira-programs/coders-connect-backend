@@ -1,0 +1,7 @@
+npm install express
+npm install mongodb
+npm install mongoose
+npm install bcrypt
+npm install dotenv
+npm install nodemon
+npm install nodemailer
