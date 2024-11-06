@@ -48,7 +48,7 @@ router.post('/create', verifyToken, upload.single('media'), async (req, res) => 
     }
 });
 
-// Route for retrieving posts by a user, sorted by date
+// Route for retrieving posts by a user, sorted by date !!!not sure if working yet
 router.get('/user-posts', verifyToken, async (req, res) => {
     try {
         const posts = await Post.find({ userId: req.user._id }).sort({ createdAt: -1 });
