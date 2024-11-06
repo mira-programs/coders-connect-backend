@@ -148,10 +148,10 @@ router.get('/verify/:token', (req, res) => {
 });
 
 //login
-router.post('/login', (req, res) => {
-    let{email, password} = req.body; 
-    if(email == "", password == ""){
-        res.json({
+router.post('/login', upload.none(), (req, res) => {
+    const {email, password} = req.body; 
+    if(!email || !password){
+        return res.json({
             status: "failed",
             message: "empty input credentials"
         })
