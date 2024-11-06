@@ -9,6 +9,24 @@ const User = require('./../models/User');
 //password handler
 const bcrypt = require('bcrypt');
 
+//multer for profile picture upload
+const multer = require('multer');
+const path = require('path');
+
+// Multer configuration
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, './uploads');  // Directory to save uploaded images
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));  // Unique filename
+    }
+});
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 1024 * 1024 * 5 }  // Limit file size to 5MB
+});
+
 // Email configuration
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -19,10 +37,12 @@ const transporter = nodemailer.createTransport({
 });
 
 //signup
-router.post('/signup', (req, res) => {
-    let{name, email, password, occupation, bio, profilePicture} = req.body; 
-    if (name == "" || email == "" || password == "" || occupation == "" || bio == "" || profilePicture == "") { 
-        res.json({
+router.post('/signup', upload.single('profilePicture'), (req, res) => {
+    const {name, email, password, occupation, bio} = req.body; 
+    const profilePicture = req.file ? req.file.path : null; //initializing path for pfp
+
+    if (!name || !email || !password || !occupation || !bio || !profilePicture) { 
+        return res.json({
             status: "FAILED", 
             message: "empty input field" 
         })

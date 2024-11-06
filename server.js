@@ -12,6 +12,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/user', UserRouter);
 app.use('/account', AccountRouter);
 
+const path = require('path');
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 })
