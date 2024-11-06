@@ -2,6 +2,7 @@
 require('./config/db');
 const UserRouter = require('./api/User');
 const AccountRouter = require('./api/Account');
+const FriendshipRouter = require('./api/Friendship');
 
 const express = require('express'); 
 const app = express();
@@ -11,6 +12,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/user', UserRouter);
 app.use('/account', AccountRouter);
+app.use('/friendship', FriendshipRouter);
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);

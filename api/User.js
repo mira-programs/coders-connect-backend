@@ -9,6 +9,10 @@ const User = require('./../models/User');
 //password handler
 const bcrypt = require('bcrypt');
 
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
 // Email configuration
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -115,10 +119,7 @@ router.get('/verify/:token', (req, res) => {
         user.verified = true;
         user.verificationToken = null; 
         user.save().then(() => {
-            res.json({
-                status: "SUCCESS",
-                message: "Email verified successfully. You can now log in."
-            });
+            res.redirect('/login');
         }).catch(err => {
             res.json({ status: "FAILED", message: "Error verifying email" });
         });
@@ -158,9 +159,16 @@ router.post('/login', (req, res) => {
                 const hashedPassword = user.password;
                 bcrypt.compare(password, hashedPassword).then(result => {
                     if(result){ 
+
+                        const payload = {
+                            userId: user._id,
+                            email: user.email
+                        };
+                        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }); // Token expires in 1 hour
                         res.json({
                             status: "SUCCESS",
                             message: "Login successful",
+                            token: token,
                             data: user
                         })
                     }else{
@@ -194,12 +202,12 @@ router.post('/login', (req, res) => {
 })
 
 router.post('/forgot-password', (req, res) => {
-    const { email, password } = req.body;
+    const { email } = req.body;
 
-    if (!email || !password) {
+    if (!email) {
         return res.json({
             status: "failed",
-            message: "Please provide both email and new password."
+            message: "Please provide an email."
         });
     }
  
@@ -219,8 +227,68 @@ router.post('/forgot-password', (req, res) => {
                 });
             }
 
-            return bcrypt.hash(password, 10).then(hashedPassword => {
+            const resetToken = crypto.randomBytes(32).toString('hex');
+            user.verificationToken = resetToken;
+            
+            return user.save();
+        })
+        .then(user => {
+            const resetLink = `http://localhost:3000/reset-password/${user.verificationToken}`;
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: user.email,
+                subject: 'Password Reset Request',
+                text: `Please click the following link to reset your password: ${resetLink}`
+            };
+            transporter.sendMail(mailOptions, (err, info) => {
+                if (err) {
+                    console.error(err);
+                    return res.json({
+                        status: "failed",
+                        message: "Error sending email."
+                    });
+                }
+                res.json({
+                    status: "SUCCESS",
+                    message: "Password reset email sent. Please check your inbox."
+                });
+            });
+        })
+        .catch(err => {
+            console.error(err);
+            res.json({
+                status: "failed",
+                message: "An error occurred while resetting the password."
+            });
+        });
+});
+
+router.post('/reset-password/:token', (req, res) => {
+    const { token } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword) {
+        return res.json({
+            status: "failed",
+            message: "Please provide a new password."
+        });
+    }
+
+    User.findOne({
+        verificationToken: token,
+    })
+        .then(user => {
+            if (!user) {
+                return res.json({
+                    status: "failed",
+                    message: "Invalid token."
+                });
+            }
+
+            // Hash the new password
+            return bcrypt.hash(newPassword, 10).then(hashedPassword => {
                 user.password = hashedPassword;
+                user.verificationToken = null;
                 return user.save();
             });
         })
@@ -238,5 +306,6 @@ router.post('/forgot-password', (req, res) => {
             });
         });
 });
+
 
 module.exports = router;

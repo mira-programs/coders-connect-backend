@@ -5,3 +5,5 @@ npm install bcrypt
 npm install dotenv
 npm install nodemon
 npm install nodemailer
+npm install socket.io
+npm install jsonwebtoken
