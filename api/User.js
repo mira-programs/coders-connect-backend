@@ -3,6 +3,9 @@ const router = express.Router();
 const crypto = require('crypto');//to generate a verification token
 const nodemailer = require('nodemailer');
 
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET;
+
 //mongodb user model
 const User = require('./../models/User');
 
@@ -181,6 +184,13 @@ router.post('/login', (req, res) => {
                             email: user.email
                         };
                         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }); // Token expires in 1 hour
+                        if(user.deleted){
+                            return res.status(400).json({ message: "account has been deleted" });
+                        }
+                        if(user.deactivated){
+                            user.deactivated = false;
+                            user.save();
+                        }
                         res.json({
                             status: "SUCCESS",
                             message: "Login successful",
