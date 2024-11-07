@@ -41,10 +41,31 @@ router.post('/create', verifyToken, upload.single('media'), async (req, res) => 
         await newPost.save();
         res.status(201).json({ status: "SUCCESS", message: "Post created successfully", data: newPost });
     } catch (err) {
+        console.log(err);
         res.status(500).json({ status: "FAILED", message: "Error creating post" });
     }
 });
 
+router.delete('/delete-post', upload.none(), (req, res) => {
+    const { postId } = req.body;  // Extract the ID from the request body
+  
+    if (!postId) {
+      return res.status(400).json({ message: "ID is required" });
+    }
+  
+    // Proceed with the delete logic
+    Post.findByIdAndDelete(postId)
+      .then(post => {
+        if (!post) {
+          return res.status(404).json({ message: "Post not found" });
+        }
+        res.status(200).json({ message: "Post deleted successfully" });
+      })
+      .catch(err => {
+        res.status(500).json({ message: "Error deleting post", error: err });
+      });
+  });
+  
 // Route for retrieving posts by a user, sorted by date !!!not sure if working yet
 router.get('/user-posts', verifyToken, async (req, res) => {
     try {

@@ -218,7 +218,7 @@ router.post('/login', upload.none(), (req, res) => {
             }
         })
         .catch(err => {
-            console.log(err);
+            console.log("Error in User.find:", err); 
             res.json({
                 status: "failed",
                 message: "an error occurred while checking for existing user"
