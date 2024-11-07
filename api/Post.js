@@ -1,4 +1,3 @@
-// api/Post.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -19,10 +18,7 @@ const upload = multer({ storage });
 // Route for creating a post (text, image, or video)
 router.post('/create', verifyToken, upload.single('media'), async (req, res) => {
     try {
-        // console.log("Request Body:", req.body);
-        // console.log("File:", req.file);
-        // console.log("User:", req.user);
-        const { content } = req.body;
+        const {content, privacy } = req.body;
         const media = req.file ? req.file.path : null;
 
         if (!content) {
@@ -35,7 +31,8 @@ router.post('/create', verifyToken, upload.single('media'), async (req, res) => 
         const newPost = new Post({
             userId: req.user.userId,
             content,
-            media
+            media,
+            privacy
         });
         console.log("User:", req.user);
         
