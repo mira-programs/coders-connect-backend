@@ -47,11 +47,6 @@ const UserSchema = new Schema({
     deactivated: {
         type: Boolean,
         default: false
-    },
-
-    deleted: {
-        type: Boolean,
-        default: false
     }
 })
 const User = mongoose.model('User', UserSchema);

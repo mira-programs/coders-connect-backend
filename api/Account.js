@@ -97,24 +97,28 @@ router.post('/deactivateAccount', (req,res) => {
     });
 });
 
-router.post('/deleteAccount', (req,res) => {
+router.delete('/deleteAccount', (req, res) => {
     const { email } = req.body;
+    //ensure they entered their email
+    if(!email){
+        return res.status(500).json({ message: "Please type your email to confirm deletion." });
+    }
     // Ensure the token belongs to the correct user
     if (req.user.email !== email) {
-        return res.status(403).json({ message: "You are not authorized to update this user's information." });
+        return res.status(403).json({ message: "You are not authorized to delete this account." });
     }
-    User.findOne({email}).then(user => {
-        if (!user) {
-            return res.status(404).send('User not found.');
-        }
-        user.deleted = true;
-        return user.save(); 
-    }).then(() => {
-        res.status(200).send('Deleted successfully');
-    }).catch(err => {
-        console.error(err);
-        res.status(500).send('Error deleting');
-    });
+
+    User.deleteOne({ email })
+        .then(result => {
+            if (result.deletedCount === 0) {
+                return res.status(404).json({ message: "User not found." });
+            }
+            res.status(200).json({ message: "Account deleted successfully." });
+        })
+        .catch(err => {
+            console.error(err);
+            res.status(500).json({ message: "Error deleting the account." });
+        });
 });
 
 module.exports = router;
