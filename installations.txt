@@ -7,3 +7,4 @@ npm install nodemon
 npm install nodemailer
 npm install socket.io
 npm install jsonwebtoken
+npm install cors

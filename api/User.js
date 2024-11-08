@@ -154,7 +154,7 @@ router.get('/verify/:token', (req, res) => {
         user.verified = true;
         user.verificationToken = null; 
         user.save().then(() => {
-            res.redirect('/login');
+            res.redirect('http://127.0.0.1:5500/login.html');
         }).catch(err => {
             res.json({ status: "FAILED", message: "Error verifying email" });
         });
