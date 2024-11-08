@@ -8,6 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 //mongodb user model
 const User = require('./../models/User');
+const Post = require('./../models/Post');
 
 //password handler
 const bcrypt = require('bcrypt');
@@ -148,81 +149,102 @@ router.get('/verify/:token', (req, res) => {
 });
 
 //login
-router.post('/login', upload.none(), (req, res) => {
+router.post('/login', upload.none(), async(req, res) => {
     const {email, password} = req.body; 
     if(!email || !password){
         return res.json({
             status: "failed",
             message: "empty input credentials"
-        })
-    }else{
-        //check if user exists
-        User.find({email})
-        .then(data => {
-            if (!data) {
-                return res.json({
-                    status: "failed",
-                    message: "User not found. Please sign up."
-                });
-            }
-            if(data.length>0){
-                const user = data[0];
-                //check if user is verified
-                if (!user.verified) {
-                    return res.json({
-                        status: "failed",
-                        message: "Email not verified. Please check your inbox."
-                    });
-                }
-                //user exists, check password
-                const hashedPassword = user.password;
-                bcrypt.compare(password, hashedPassword).then(result => {
-                    if(result){ 
-
-                        const payload = {
-                            userId: user._id,
-                            email: user.email
-                        };
-                        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }); // Token expires in 1 hour
-                        if(user.deactivated){
-                            user.deactivated = false;
-                            user.save();
-                        }
-                        res.json({
-                            status: "SUCCESS",
-                            message: "Login successful",
-                            token: token,
-                            data: user
-                        })
-                    }else{
-                        res.json({
-                            status: "failed",
-                            message: "incorrect password"
-                        })
-                    }
-                })
-                .catch(err => {
-                    res.json({
-                        status: "failed",
-                        message: "error while checking password"
-                    })
-                })
-            }else{
-                res.json({
-                    status: "failed",
-                    message: "invalid credentials"
-                })
-            }
-        })
-        .catch(err => {
-            console.log("Error in User.find:", err); 
-            res.json({
-                status: "failed",
-                message: "an error occurred while checking for existing user"
-            })
-        })
+        });
     }
-})
+    try {
+        // Check if the user exists
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.json({
+                status: "failed",
+                message: "User not found. Please sign up."
+            });
+        }
+
+        // Check if the user is verified
+        if (!user.verified) {
+            return res.json({
+                status: "failed",
+                message: "Email not verified. Please check your inbox."
+            });
+        }
+
+        // Check if the user is deactivated
+        if (user.deactivated) {
+            // Reactivate the user's account
+            user.deactivated = false;
+            await user.save();
+        
+            // Reactivate the user's posts
+            await Post.updateMany(
+                { userId: user._id },
+                { $set: { isActive: true } }
+            );
+        
+            await Post.updateMany(
+                { 'comments.postedBy': user._id },
+                { $set: { 'comments.$[].isActive': true } }
+            );
+        
+            await Post.updateMany(
+                { 'comments.replies.postedBy': user._id },
+                { $set: { 'comments.$[].replies.$[].isActive': true } }
+            );
+        
+            await Post.updateMany(
+                { userId: user._id },
+                { $set: { 'likes.$[].isActive': true } }
+            );
+        
+            await Post.updateMany(
+                { 'comments.postedBy': user._id },
+                { $set: { 
+                    'comments.$[].likes.$[].isActive': true,
+                    'comments.$[].dislikes.$[].isActive': true 
+                }}
+            );
+        }
+
+        // Check if the password matches
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            return res.json({
+                status: "failed",
+                message: "Incorrect password"
+            });
+        }
+
+        // Generate JWT token
+        const payload = {
+            userId: user._id,
+            email: user.email
+        };
+
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }); // Token expires in 1 hour
+
+        res.json({
+            status: "SUCCESS",
+            message: "Login successful",
+            token: token,
+            data: user
+        });
+
+    } catch (err) {
+        console.log("Error during login:", err);
+        res.json({
+            status: "failed",
+            message: "An error occurred while logging in"
+        });
+    }
+});
 
 router.post('/forgot-password', (req, res) => {
     const { email } = req.body;

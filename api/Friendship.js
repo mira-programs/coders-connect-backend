@@ -169,4 +169,56 @@ router.get('/get-friends/:userEmail', async (req, res) => {
     }
 });
 
+// Route to unfriend a user
+router.post('/unfriend', verifyToken, async (req, res) => {
+    const { userIdToUnfriend } = req.body;
+    const currentUserId = req.user.userId; // Get the current logged-in user's ID
+
+    if (!userIdToUnfriend) {
+        return res.status(400).json({
+            status: "FAILED",
+            message: "User ID to unfriend is required"
+        });
+    }
+
+    try {
+        // Find the friendship between the current user and the user to unfriend
+        const friendship = await Friendship.findOne({
+            $or: [
+                { user1: currentUserId, user2: userIdToUnfriend },
+                { user1: userIdToUnfriend, user2: currentUserId }
+            ]
+        });
+
+        if (!friendship) {
+            return res.status(404).json({
+                status: "FAILED",
+                message: "Friendship not found"
+            });
+        }
+
+        // If the friendship status is "accepted", we can remove or update it
+        if (friendship.status === 'accepted') {
+            // Option 1: Remove the friendship record completely
+            await Friendship.deleteOne({ _id: friendship._id });
+            
+            return res.status(200).json({
+                status: "SUCCESS",
+                message: "You have unfriended this user"
+            });
+        } else {
+            return res.status(400).json({
+                status: "FAILED",
+                message: "You are not friends with this user"
+            });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            status: "FAILED",
+            message: "Error unfriending user"
+        });
+    }
+});
+
 module.exports = router;
