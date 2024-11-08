@@ -42,15 +42,20 @@ const transporter = nodemailer.createTransport({
 
 //signup
 router.post('/signup', upload.single('profilePicture'), (req, res) => {
-    const {name, email, password, occupation, bio} = req.body; 
+    const {username, email, firstName, lastName, password, occupation, bio} = req.body; 
     const profilePicture = req.file ? req.file.path : null; //initializing path for pfp
 
-    if (!name || !email || !password || !occupation || !bio || !profilePicture) { 
+    if (!username || !email || !password || !firstName || !lastName || !occupation || !bio || !profilePicture) { 
         return res.json({
             status: "FAILED", 
             message: "empty input field" 
         })
-    }else if(!/^[a-zA-Z ]*$/.test(name)){
+    }else if(!/^[a-zA-Z ]*$/.test(firstName)){
+        res.json({
+            status: "FAILED",
+            message: "Invalid name entered"
+        })
+    }else if(!/^[a-zA-Z ]*$/.test(lastName)){
         res.json({
             status: "FAILED",
             message: "Invalid name entered"
@@ -77,9 +82,11 @@ router.post('/signup', upload.single('profilePicture'), (req, res) => {
                 bcrypt.hash(password,10).then(hashedPassword => {
                     const verificationToken = crypto.randomBytes(32).toString('hex');
                     const newUser = new User({
-                        name,
+                        username,
                         email,
                         password: hashedPassword,
+                        firstName,
+                        lastName,
                         occupation,
                         bio,
                         profilePicture,
