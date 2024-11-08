@@ -44,12 +44,20 @@ const transporter = nodemailer.createTransport({
 router.post('/signup', upload.single('profilePicture'), (req, res) => {
     const {username, email, firstName, lastName, password, occupation, bio} = req.body; 
     const profilePicture = req.file ? req.file.path : null; //initializing path for pfp
-
-    if (!username || !email || !password || !firstName || !lastName || !occupation || !bio || !profilePicture) { 
+    const missingFields = [];
+    if (!username) missingFields.push("username");
+    if (!email) missingFields.push("email");
+    if (!password) missingFields.push("password");
+    if (!firstName) missingFields.push("firstName");
+    if (!lastName) missingFields.push("lastName");
+    if (!occupation) missingFields.push("occupation");
+    if (!bio) missingFields.push("bio");
+    if (!profilePicture) missingFields.push("profilePicture");
+    if (missingFields.length > 0) {
         return res.json({
-            status: "FAILED", 
-            message: "empty input field" 
-        })
+            status: "FAILED",
+            message: `The following fields are empty: ${missingFields.join(", ")}`
+        });    
     }else if(!/^[a-zA-Z ]*$/.test(firstName)){
         res.json({
             status: "FAILED",
