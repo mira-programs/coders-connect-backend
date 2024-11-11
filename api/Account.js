@@ -74,16 +74,14 @@ router.post('/update-profilepicture', verifyToken, upload.single('profilePicture
     }
 
     try {
-        // Find the user by their userId (from the token)
         const user = await User.findById(currentUserId);
 
         if (!user) {
             return res.status(404).json({ message: 'User not found.' });
         }
 
-        // Update the profile picture
         user.profilePicture = req.file.path;
-        await user.save(); // Save the updated profile picture
+        await user.save(); 
 
         res.status(200).json({ message: 'Profile picture updated successfully.' });
     } catch (err) {
@@ -96,7 +94,6 @@ router.post('/deactivateAccount', verifyToken, async (req, res) => {
     const currentUserId = req.user.userId;
 
     try {
-        // Deactivate the user account
         const user = await User.findById(currentUserId);
 
         if (!user) {
@@ -106,38 +103,6 @@ router.post('/deactivateAccount', verifyToken, async (req, res) => {
         user.deactivated = true;
         await user.save();
 
-        //  Deactivate the user's posts (without deleting)
-        await Post.updateMany({ userId: currentUserId }, { $set: { isActive: false } });
-
-        //  Deactivate the user's comments on posts
-        await Post.updateMany(
-            { 'comments.postedBy': currentUserId },
-            { $set: { 'comments.$[].isActive': false } }
-        );
-
-        //Remove likes and dislikes from posts (but keep the data)
-        await Post.updateMany(
-            { likes: currentUserId },
-            { $pull: { likes: currentUserId } }
-        );
-
-        await Post.updateMany(
-            { dislikes: currentUserId },
-            { $pull: { dislikes: currentUserId } }
-        );
-
-        //Remove likes and dislikes from comments (but keep the data)
-        await Post.updateMany(
-            { 'comments.likes': currentUserId },
-            { $pull: { 'comments.$[].likes': currentUserId } }
-        );
-
-        await Post.updateMany(
-            { 'comments.dislikes': currentUserId },
-            { $pull: { 'comments.$[].dislikes': currentUserId } }
-        );
-
-        // Respond with success message
         res.status(200).json({ message: "Account deactivated successfully." });
 
     } catch (err) {
@@ -158,10 +123,10 @@ router.delete('/deleteAccount', verifyToken, async (req, res) => {
     }
 
     try {
-        // Step 1: Delete all posts made by the user
+        // Delete all posts made by the user
         await Post.deleteMany({ userId: currentUserId });
 
-        // Step 2: Delete all friendships involving the user
+        // Delete all friendships involving the user
         await Friendship.deleteMany({
             $or: [
                 { user1: currentUserId },
@@ -169,38 +134,55 @@ router.delete('/deleteAccount', verifyToken, async (req, res) => {
             ]
         });
 
-        // Step 3: Remove likes and dislikes from posts made by the user
+        //Remove likes and dislikes from posts made by the user
         await Post.updateMany(
-            { likes: currentUserId }, // Find posts that the user has liked
-            { $pull: { likes: currentUserId } } // Remove the user ID from the likes array
+            { likes: currentUserId }, 
+            { $pull: { likes: currentUserId } } 
         );
 
         await Post.updateMany(
-            { dislikes: currentUserId }, // Find posts that the user has disliked
-            { $pull: { dislikes: currentUserId } } // Remove the user ID from the dislikes array
+            { dislikes: currentUserId }, 
+            { $pull: { dislikes: currentUserId } } 
         );
 
-        // Step 4: Remove comments made by the user
+        //Remove comments made by the user
         await Post.updateMany(
-            { 'comments.postedBy': currentUserId }, // Find posts where the user has commented
-            { $pull: { comments: { postedBy: currentUserId } } } // Remove the comments made by the user
+            { 'comments.postedBy': currentUserId }, 
+            { $pull: { comments: { postedBy: currentUserId } } } 
         );
 
-        // Step 5: Remove likes and dislikes from comments made by the user
+        //Remove likes and dislikes from comments made by the user
         await Post.updateMany(
-            { 'comments.likes': currentUserId }, // Find posts where the user has liked a comment
-            { $pull: { 'comments.$[].likes': currentUserId } } // Remove the user's like from all comments
+            { 'comments.likes': currentUserId }, 
+            { $pull: { 'comments.$[].likes': currentUserId } } 
         );
 
         await Post.updateMany(
-            { 'comments.dislikes': currentUserId }, // Find posts where the user has disliked a comment
-            { $pull: { 'comments.$[].dislikes': currentUserId } } // Remove the user's dislike from all comments
+            { 'comments.dislikes': currentUserId },
+            { $pull: { 'comments.$[].dislikes': currentUserId } } 
         );
 
+         // Remove replies made by the user
+         await Post.updateMany(
+            { 'comments.replies.postedBy': currentUserId },
+            { $pull: { 'comments.$[].replies': { postedBy: currentUserId } } }
+        );
+
+        // Remove likes and dislikes from replies made by the user
+        await Post.updateMany(
+            { 'comments.replies.likes': currentUserId },
+            { $pull: { 'comments.$[].replies.$[].likes': currentUserId } }
+        );
+
+        await Post.updateMany(
+            { 'comments.replies.dislikes': currentUserId },
+            { $pull: { 'comments.$[].replies.$[].dislikes': currentUserId } }
+        );
+        
         // Removing the user
         await User.deleteOne({ _id: currentUserId });
 
-        // Step 7: Respond with a success message
+        // Respond with a success message
         res.status(200).json({
             message: "Account and associated data deleted successfully."
         });

@@ -27,7 +27,7 @@ router.post('/send-friend-request',verifyToken, async (req, res) => {
         if (!user || !friend) {
             return res.status(404).json({ message: "User(s) not found." });
         }
-
+        
         const existingFriendship = await Friendship.findOne({
             $or: [
                 { user1: user._id, user2: friend._id },
@@ -167,9 +167,12 @@ router.get('/get-friends',verifyToken, async (req, res) => {
             ]
         }).populate('user1 user2', 'name email'); 
 
-        const friends = friendships.map(friendship => {
-            return friendship.user1._id.toString() === user._id.toString() ? friendship.user2 : friendship.user1;
-        });
+        
+        const friends = friendships
+            .map(friendship => {
+                return friendship.user1._id.toString() === user._id.toString() ? friendship.user2 : friendship.user1;
+            })
+            .filter(friend => friend.status !== 'deactivated');
 
         res.status(200).json({ friends });
     } catch (err) {

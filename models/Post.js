@@ -11,36 +11,16 @@ const postSchema = new mongoose.Schema({
         text: String,
         created: { type: Date, default: Date.now },
         postedBy: { type: mongoose.Schema.ObjectId, ref: "User" },
-        likes: [{ type: mongoose.Schema.ObjectId, ref: "User",
-            isActive: {
-                type: Boolean,
-                default: true,
-            },
-        }],
-        dislikes: [{ type: mongoose.Schema.ObjectId, ref: "User",
-            isActive: {
-                type: Boolean,
-                default: true,
-            },
-         }],
-        isActive: {
-            type: Boolean,
-            default: true, 
-        },
+        likes: [{ type: mongoose.Schema.ObjectId, ref: "User",}],
+        dislikes: [{ type: mongoose.Schema.ObjectId, ref: "User",}],
         replies: [{
             text: String,
             created: { type: Date, default: Date.now },
             postedBy: { type: mongoose.Schema.ObjectId, ref: "User" },
-            isActive: {
-                type: Boolean,
-                default: true,
-            },
+            likes: [{ type: mongoose.Schema.ObjectId, ref: "User",}],
+            dislikes: [{ type: mongoose.Schema.ObjectId, ref: "User",}]
         }],
     }],
-    isActive: {
-        type: Boolean,
-        default: true,
-    },
 });
 
 const Post = mongoose.model('Post', postSchema);

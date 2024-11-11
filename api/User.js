@@ -196,35 +196,6 @@ router.post('/login', upload.none(), async(req, res) => {
             // Reactivate the user's account
             user.deactivated = false;
             await user.save();
-        
-            // Reactivate the user's posts
-            await Post.updateMany(
-                { userId: user._id },
-                { $set: { isActive: true } }
-            );
-        
-            await Post.updateMany(
-                { 'comments.postedBy': user._id },
-                { $set: { 'comments.$[].isActive': true } }
-            );
-        
-            await Post.updateMany(
-                { 'comments.replies.postedBy': user._id },
-                { $set: { 'comments.$[].replies.$[].isActive': true } }
-            );
-        
-            await Post.updateMany(
-                { userId: user._id },
-                { $set: { 'likes.$[].isActive': true } }
-            );
-        
-            await Post.updateMany(
-                { 'comments.postedBy': user._id },
-                { $set: { 
-                    'comments.$[].likes.$[].isActive': true,
-                    'comments.$[].dislikes.$[].isActive': true 
-                }}
-            );
         }
 
         // Check if the password matches

@@ -36,7 +36,6 @@ router.post('/create', verifyToken, upload.single('media'), async (req, res) => 
             media,
             privacy
         });
-        console.log("User:", req.user);
         
         await newPost.save();
         res.status(200).json({ status: "SUCCESS", message: "Post created successfully", data: newPost });
@@ -79,62 +78,83 @@ router.delete('/delete-post', verifyToken, async (req, res) => {
 
 
 // Route to get posts based on friendship status and privacy settings
-router.get('/user-posts/:userId', verifyToken, async (req, res) => {
-    const { userId } = req.params; // The user whose posts we want to fetch
-    const currentUserId = req.user.userId; // The current logged-in user's ID
+router.get('/user-posts', verifyToken, async (req, res) => {
+    const { userId } = req.body;
+    const currentUserId = req.user.userId;
+
+    if(!userId){
+        return res.status(400).json({ message: "User ID is required" });
+    }
 
     try {
-        // Check if the user exists
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Check the friendship status between the logged-in user and the target user
+        if(user.deactivated){
+            return res.status(403).json({ message: "User account is deactivated" });
+        }
+
         const friendship = await Friendship.findOne({
             $or: [
-                { user1: currentUserId, user2: userId }, // Current user is user1
-                { user1: userId, user2: currentUserId }  // Current user is user2
+                { user1: currentUserId, user2: userId }, 
+                { user1: userId, user2: currentUserId }  
             ]
         });
 
-        // Determine if the user is friends or not
         let isFriend = false;
         if (friendship && friendship.status === 'accepted') {
             isFriend = true;
         }
 
-        // Fetch posts based on the friendship status and privacy setting
-        let postsQuery = Post.find({ userId: userId, isActive: true }); // Start by filtering by userId
-        
-        if (isFriend) {
-            // If friends, allow public, friends, and private posts
+        let postsQuery = Post.find({ userId: userId}); 
+
+        if(currentUserId === userId){
+            postsQuery = postsQuery.where('privacy').in(['public', 'friends','private']);
+        }else if (isFriend) {
+            // If friends, allow public, friends posts
             postsQuery = postsQuery.where('privacy').in(['public', 'friends']);
         } else {
             // If not friends, only show public posts
             postsQuery = postsQuery.where('privacy').in(['public']);
         }
-        
-        let posts = await postsQuery.sort({ createdAt: -1 }).populate('likes.userId dislikes.userId comments.postedBy');
 
-        // Filter active comments, replies, likes, and dislikes
+        postsQuery = postsQuery.populate({
+            path: 'userId',
+            match: { deactivated: { $ne: true } },
+            select: 'name email'
+        });
+
+        postsQuery = postsQuery.populate({
+            path: 'likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes',
+            match: { deactivated: { $ne: true } },
+            select: 'name email'
+        });
+
+        let posts = await postsQuery.sort({ createdAt: -1 });
+
+        // Filter out posts where the userId is null (deactivated users)
+        posts = posts.filter(post => post.userId !== null);
+
+        // Filter out likes, dislikes, and comments from deactivated users
         posts = posts.map(post => {
-            // Filter active comments
-            post.comments = post.comments.filter(comment => comment.isActive);
-
-            // Filter active replies for each comment
-            post.comments.forEach(comment => {
-                comment.replies = comment.replies.filter(reply => reply.isActive);
-                
-                // Optionally: Filter active likes and dislikes for each comment (remove likes/dislikes by deactivated users)
-                comment.likes = comment.likes.filter(like => like.isActive !== false); // Only keep active likes
-                comment.dislikes = comment.dislikes.filter(dislike => dislike.isActive !== false); // Only keep active dislikes
-            });
-
-            // Filter active likes/dislikes on the post itself (optional based on your use case)
-            post.likes = post.likes.filter(like => like.isActive !== false); // Only keep active likes
-            post.dislikes = post.dislikes.filter(dislike => dislike.isActive !== false); // Only keep active dislikes
-
+            post.likes = post.likes.filter(user => user !== null);
+            post.dislikes = post.dislikes.filter(user => user !== null);
+            post.comments = post.comments
+                .filter(comment => comment.postedBy !== null) // Exclude comments from deactivated users
+                .map(comment => {
+                    comment.likes = comment.likes.filter(user => user !== null);
+                    comment.dislikes = comment.dislikes.filter(user => user !== null);
+                    comment.replies = comment.replies
+                        .filter(reply => reply.postedBy !== null) // Exclude replies from deactivated users
+                        .map(reply => {
+                            reply.likes = reply.likes.filter(user => user !== null);
+                            reply.dislikes = reply.dislikes.filter(user => user !== null);
+                            return reply;
+                        });
+                    return comment;
+                });
             return post;
         });
 
@@ -196,13 +216,10 @@ router.post('/dislike-post', verifyToken, async (req, res) => {
             return res.status(404).json({ message: "Post not found" });
         }
 
-        // Check if the user has already liked the post
         if (post.likes.includes(req.user.userId)) {
-            // If user has liked the post, remove the like
             post.likes.pull(req.user.userId);
         }
 
-        // Now add the dislike (if it's not already disliked)
         if (!post.dislikes.includes(req.user.userId)) {
             post.dislikes.push(req.user.userId);
         }
@@ -222,6 +239,7 @@ router.post('/dislike-post', verifyToken, async (req, res) => {
 // Route to add a comment to a post
 router.post('/comment-post', verifyToken, async (req, res) => {
     const { postId, text } = req.body;
+
     if (!postId || !text) {
         return res.status(400).json({ message: "Post ID and comment text are required" });
     }
@@ -232,7 +250,6 @@ router.post('/comment-post', verifyToken, async (req, res) => {
             return res.status(404).json({ message: "Post not found" });
         }
 
-        // Add the comment to the post
         post.comments.push({
             text,
             postedBy: req.user.userId,
@@ -242,7 +259,7 @@ router.post('/comment-post', verifyToken, async (req, res) => {
         await post.save();
         res.status(200).json({ message: "Comment added successfully", data: post });
     } catch (err) {
-        res.status(500).json({ message: "Error adding comment", error: err });
+        res.status(500).json({ message: "Error adding comment", error: err.message });
     }
 });
 
@@ -268,7 +285,6 @@ router.put('/edit-post', verifyToken, upload.single('media'), async (req, res) =
             return res.status(403).json({ message: "You are not authorized to edit this post" });
         }
 
-        // Update post content and media (if provided)
         if(content){
             post.content = content;
         }
@@ -289,6 +305,7 @@ router.put('/edit-post', verifyToken, upload.single('media'), async (req, res) =
 // Like a comment
 router.post('/like-comment', verifyToken, async (req, res) => {
     const { postId, commentId } = req.body;
+
     if (!postId || !commentId) {
         return res.status(400).json({ message: "Post ID and Comment ID are required" });
     }
@@ -299,7 +316,6 @@ router.post('/like-comment', verifyToken, async (req, res) => {
             return res.status(404).json({ message: "Post not found" });
         }
 
-        // Find the comment to like
         const comment = post.comments.id(commentId);
         if (!comment) {
             return res.status(404).json({ message: "Comment not found" });
@@ -329,6 +345,7 @@ router.post('/like-comment', verifyToken, async (req, res) => {
 // Dislike a comment
 router.post('/dislike-comment', verifyToken, async (req, res) => {
     const { postId, commentId } = req.body;
+
     if (!postId || !commentId) {
         return res.status(400).json({ message: "Post ID and Comment ID are required" });
     }
@@ -369,6 +386,7 @@ router.post('/dislike-comment', verifyToken, async (req, res) => {
 // Reply to a comment
 router.post('/comment-reply', verifyToken, async (req, res) => {
     const { postId, commentId, text } = req.body;
+
     if (!postId || !commentId || !text) {
         return res.status(400).json({ message: "Post ID, comment ID, and text are required" });
     }
@@ -399,7 +417,167 @@ router.post('/comment-reply', verifyToken, async (req, res) => {
             replyUser: req.user.userId
         });
     } catch (err) {
+        console.log(err);
         res.status(500).json({ message: "Error adding reply", error: err });
+    }
+});
+
+// Route to like a reply on a comment
+router.post('/like-reply', verifyToken, async (req, res) => {
+    const { postId, commentId, replyId } = req.body;
+
+    if (!postId || !commentId || !replyId) {
+        return res.status(400).json({ message: "Post ID, Comment ID, and Reply ID are required" });
+    }
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        const comment = post.comments.id(commentId);
+        if (!comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+
+        const reply = comment.replies.id(replyId);
+        if (!reply) {
+            return res.status(404).json({ message: "Reply not found" });
+        }
+
+        if (reply.dislikes.includes(req.user.userId)) {
+            reply.dislikes.pull(req.user.userId);
+        }
+
+        if (!reply.likes.includes(req.user.userId)) {
+            reply.likes.push(req.user.userId);
+        }
+
+        await post.save();
+        res.status(200).json({
+            message: "Reply liked successfully",
+            likesCount: reply.likes.length,
+            dislikesCount: reply.dislikes.length
+        });
+    } catch (err) {
+        res.status(500).json({ message: "Error liking reply", error: err });
+    }
+});
+
+// Route to dislike a reply
+router.post('/dislike-reply', verifyToken, async (req, res) => {
+    const { postId, commentId, replyId } = req.body;
+
+    if (!postId || !commentId || !replyId) {
+        return res.status(400).json({ message: "Post ID, Comment ID, and Reply ID are required" });
+    }
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        const comment = post.comments.id(commentId);
+        if (!comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+
+        const reply = comment.replies.id(replyId);
+        if (!reply) {
+            return res.status(404).json({ message: "Reply not found" });
+        }
+
+        if (reply.likes.includes(req.user.userId)) {
+            reply.likes.pull(req.user.userId);
+        }
+
+        if (!reply.dislikes.includes(req.user.userId)) {
+            reply.dislikes.push(req.user.userId);
+        }
+
+        await post.save();
+        res.status(200).json({
+            message: "Reply disliked successfully",
+            likesCount: reply.likes.length,
+            dislikesCount: reply.dislikes.length
+        });
+    } catch (err) {
+        res.status(500).json({ message: "Error disliking reply", error: err });
+    }
+});
+
+// Route to get feed posts from activated friends
+router.get('/feed', verifyToken, async (req, res) => {
+    const currentUserId = req.user.userId;
+
+    try {
+        const user = await User.findById(currentUserId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        // Find all friendships where the current user is involved and the friend is not deactivated
+        const friendships = await Friendship.find({
+            $or: [
+                { user1: currentUserId, status: 'accepted' },
+                { user2: currentUserId, status: 'accepted' }
+            ]
+        }).populate({
+            path: 'user1 user2',
+            match: { deactivated: { $ne: true } },
+            select: 'name email'
+        });
+
+        // Get the list of active friends' IDs
+        const friendIds = friendships.map(friendship => {
+            if (friendship.user1 && friendship.user1._id.toString() === currentUserId) {
+                return friendship.user2._id;
+            } else if (friendship.user2 && friendship.user2._id.toString() === currentUserId) {
+                return friendship.user1._id;
+            }
+            return null;
+        }).filter(id => id !== null);
+
+
+         // If there are no friends, return 0 posts
+         if (friendIds.length === 0) {
+            return res.status(200).json({ status: "SUCCESS", data: [] });
+        }
+
+        // Query posts from these friends based on their privacy settings
+        let posts = await Post.find({
+            userId: { $in: friendIds },
+            privacy: { $in: ['public', 'friends'] }
+        }).sort({ createdAt: -1 })
+          .populate('userId', 'name email')
+          .populate('likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes');
+
+        posts = posts.map(post => {
+            post.likes = post.likes.filter(user => user !== null);
+            post.dislikes = post.dislikes.filter(user => user !== null);
+            post.comments = post.comments
+                .filter(comment => comment.postedBy !== null) 
+                .map(comment => {
+                    comment.likes = comment.likes.filter(user => user !== null);
+                    comment.dislikes = comment.dislikes.filter(user => user !== null);
+                    comment.replies = comment.replies
+                        .filter(reply => reply.postedBy !== null) 
+                        .map(reply => {
+                            reply.likes = reply.likes.filter(user => user !== null);
+                            reply.dislikes = reply.dislikes.filter(user => user !== null);
+                            return reply;
+                        });
+                    return comment;
+                });
+            return post;
+        });
+
+        res.status(200).json({ status: "SUCCESS", data: posts });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ status: "FAILED", message: "Error retrieving feed posts" });
     }
 });
 
