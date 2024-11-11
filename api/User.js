@@ -42,15 +42,28 @@ const transporter = nodemailer.createTransport({
 
 //signup
 router.post('/signup', upload.single('profilePicture'), (req, res) => {
-    const {name, email, password, occupation, bio} = req.body; 
+    const {username, email, firstName, lastName, password, occupation, bio} = req.body; 
     const profilePicture = req.file ? req.file.path : null; //initializing path for pfp
-
-    if (!name || !email || !password || !occupation || !bio || !profilePicture) { 
+    const missingFields = [];
+    if (!username) missingFields.push("username");
+    if (!email) missingFields.push("email");
+    if (!password) missingFields.push("password");
+    if (!firstName) missingFields.push("firstName");
+    if (!lastName) missingFields.push("lastName");
+    if (!occupation) missingFields.push("occupation");
+    if (!bio) missingFields.push("bio");
+    if (!profilePicture) missingFields.push("profilePicture");
+    if (missingFields.length > 0) {
         return res.json({
-            status: "FAILED", 
-            message: "empty input field" 
+            status: "FAILED",
+            message: `The following fields are empty: ${missingFields.join(", ")}`
+        });    
+    }else if(!/^[a-zA-Z ]*$/.test(firstName)){
+        res.json({
+            status: "FAILED",
+            message: "Invalid name entered"
         })
-    }else if(!/^[a-zA-Z ]*$/.test(name)){
+    }else if(!/^[a-zA-Z ]*$/.test(lastName)){
         res.json({
             status: "FAILED",
             message: "Invalid name entered"
@@ -77,9 +90,11 @@ router.post('/signup', upload.single('profilePicture'), (req, res) => {
                 bcrypt.hash(password,10).then(hashedPassword => {
                     const verificationToken = crypto.randomBytes(32).toString('hex');
                     const newUser = new User({
-                        name,
+                        username,
                         email,
                         password: hashedPassword,
+                        firstName,
+                        lastName,
                         occupation,
                         bio,
                         profilePicture,
@@ -139,7 +154,7 @@ router.get('/verify/:token', (req, res) => {
         user.verified = true;
         user.verificationToken = null; 
         user.save().then(() => {
-            res.redirect('/login');
+            res.redirect('http://127.0.0.1:5500/login.html');
         }).catch(err => {
             res.json({ status: "FAILED", message: "Error verifying email" });
         });

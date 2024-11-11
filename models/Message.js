@@ -1,30 +1,20 @@
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
-
-const MessageSchema = new Schema({
-    sender: {
-        type: String,
-        required: true
+const messageSchema = new mongoose.Schema({
+    senderId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User',
+        required: true,
     },
-    receiver: {
-        type: String, 
-        required: true
+    receiverId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User',
+        required: true,
     },
     message: {
         type: String,
         required: true
-    },
-    status: {
-        type: String,
-        enum: ['pending', 'delivered'],
-        default: 'pending' // Message status, 'pending' means the receiver is offline
-    },
-    timestamp: {
-        type: Date,
-        default: Date.now
     }
-});
+},{timestamps: true});
 
-const Message = mongoose.model('Message', MessageSchema);
-
+const Message = mongoose.model('Message', messageSchema);
 module.exports = Message;
