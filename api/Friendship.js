@@ -4,23 +4,25 @@ const Friendship = require('../models/Friendship');
 const User = require('../models/User');
 const verifyToken = require('./../middleware/verifyToken'); 
 
-router.use(verifyToken);
+router.post('/send-friend-request',verifyToken, async (req, res) => {
+    const {userIdToSend} = req.body;
 
-router.post('/send-friend-request', async (req, res) => {
-    const { userEmail, friendEmail } = req.body;
+    const currentUserId = req.user.userId; 
 
-    // Ensure the token belongs to the correct user
-    if (req.user.email !== email) {
-        return res.status(403).json({ message: "You are not authorized to update this user's information." });
+    if (!userIdToSend) {
+        return res.status(400).json({
+            status: "FAILED",
+            message: "User ID to send is required"
+        });
     }
 
-    if (userEmail === friendEmail) {
+    if (userIdToSend === currentUserId) {
         return res.status(400).json({ message: "You cannot send a friend request to yourself." });
     }
 
     try {
-        const user = await User.findOne({ email: userEmail });
-        const friend = await User.findOne({ email: friendEmail });
+        const user = await User.findById(currentUserId);
+        const friend = await User.findById(userIdToSend);
 
         if (!user || !friend) {
             return res.status(404).json({ message: "User(s) not found." });
@@ -51,17 +53,24 @@ router.post('/send-friend-request', async (req, res) => {
     }
 });
 
-router.post('/accept-friend-request', async (req, res) => {
-    const { userEmail, friendEmail } = req.body;
+router.post('/accept-friend-request',verifyToken, async (req, res) => {
+    const { userIdToAccept } = req.body;
+    const currentUserId = req.user.userId;
 
-    // Ensure the token belongs to the correct user
-    if (req.user.email !== email) {
-        return res.status(403).json({ message: "You are not authorized to update this user's information." });
+    if (!userIdToAccept) {
+        return res.status(400).json({
+            status: "FAILED",
+            message: "User ID to accept is required"
+        });
+    }
+
+    if (userIdToAccept === currentUserId) {
+        return res.status(400).json({ message: "You cannot accept a friend request to yourself." });
     }
 
     try {
-        const user = await User.findOne({ email: userEmail });
-        const friend = await User.findOne({ email: friendEmail });
+        const user = await User.findById( currentUserId );
+        const friend = await User.findById(userIdToAccept);
 
         if (!user || !friend) {
             return res.status(404).json({ message: "User(s) not found." });
@@ -94,17 +103,24 @@ router.post('/accept-friend-request', async (req, res) => {
     }
 });
 
-router.post('/reject-friend-request', async (req, res) => {
-    const { userEmail, friendEmail } = req.body;
+router.post('/reject-friend-request', verifyToken, async (req, res) => {
+    const {userIdToReject } = req.body;
+    const currentUserId = req.user.userId;
 
-    // Ensure the token belongs to the correct user
-    if (req.user.email !== email) {
-        return res.status(403).json({ message: "You are not authorized to update this user's information." });
+    if (!userIdToReject) {
+        return res.status(400).json({
+            status: "FAILED",
+            message: "User ID to reject is required"
+        });
+    }
+
+    if (userIdToReject === currentUserId) {
+        return res.status(400).json({ message: "You cannot reject a friend request to yourself." });
     }
 
     try {
-        const user = await User.findOne({ email: userEmail });
-        const friend = await User.findOne({ email: friendEmail });
+        const user = await User.findById(currentUserId);
+        const friend = await User.findById(userIdToReject);
 
         if (!user || !friend) {
             return res.status(404).json({ message: "User(s) not found." });
@@ -112,7 +128,6 @@ router.post('/reject-friend-request', async (req, res) => {
 
         const friendship = await Friendship.findOne({
             $or: [
-                { user1: user._id, user2: friend._id, status: 'pending' },
                 { user1: friend._id, user2: user._id, status: 'pending' }
             ]
         });
@@ -127,8 +142,7 @@ router.post('/reject-friend-request', async (req, res) => {
             });
         }
 
-        friendship.status = 'rejected';
-        await friendship.save();
+        await Friendship.deleteOne({ _id: friendship._id });
 
         res.status(200).json({ message: "Friend request rejected." });
     } catch (err) {
@@ -137,16 +151,11 @@ router.post('/reject-friend-request', async (req, res) => {
     }
 });
 
-router.get('/get-friends/:userEmail', async (req, res) => {
-    const { userEmail } = req.params;
-
-    // Ensure the token belongs to the correct user
-    if (req.user.email !== email) {
-        return res.status(403).json({ message: "You are not authorized to update this user's information." });
-    }
+router.get('/get-friends',verifyToken, async (req, res) => {
+    const currentUserId = req.user.userId;
 
     try {
-        const user = await User.findOne({ email: userEmail });
+        const user = await User.findById(currentUserId);
         if (!user) {
             return res.status(404).json({ message: "User not found." });
         }
@@ -169,16 +178,19 @@ router.get('/get-friends/:userEmail', async (req, res) => {
     }
 });
 
-// Route to unfriend a user
 router.post('/unfriend', verifyToken, async (req, res) => {
     const { userIdToUnfriend } = req.body;
-    const currentUserId = req.user.userId; // Get the current logged-in user's ID
+    const currentUserId = req.user.userId; 
 
     if (!userIdToUnfriend) {
         return res.status(400).json({
             status: "FAILED",
             message: "User ID to unfriend is required"
         });
+    }
+
+    if (userIdToUnfriend === currentUserId) {
+        return res.status(400).json({ message: "You cannot unfriend yourself." });
     }
 
     try {
@@ -197,9 +209,7 @@ router.post('/unfriend', verifyToken, async (req, res) => {
             });
         }
 
-        // If the friendship status is "accepted", we can remove or update it
         if (friendship.status === 'accepted') {
-            // Option 1: Remove the friendship record completely
             await Friendship.deleteOne({ _id: friendship._id });
             
             return res.status(200).json({

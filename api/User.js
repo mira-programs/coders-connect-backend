@@ -295,7 +295,8 @@ router.post('/forgot-password', (req, res) => {
                 }
                 res.json({
                     status: "SUCCESS",
-                    message: "Password reset email sent. Please check your inbox."
+                    message: "Password reset email sent. Please check your inbox.",
+                    token: user.verificationToken
                 });
             });
         })
