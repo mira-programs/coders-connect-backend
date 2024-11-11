@@ -10,7 +10,7 @@ router.post('/send-friend-request', async (req, res) => {
     const { userEmail, friendEmail } = req.body;
 
     // Ensure the token belongs to the correct user
-    if (req.user.email !== email) {
+    if (req.user.email !== userEmail) {
         return res.status(403).json({ message: "You are not authorized to update this user's information." });
     }
 
