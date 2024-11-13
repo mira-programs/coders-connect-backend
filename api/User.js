@@ -78,6 +78,21 @@ router.post('/signup', upload.single('profilePicture'), (req, res) => {
             status: "FAILED",
             message: "password is too short"
         })  
+    } else if(!/[A-Z]/.test(password)){
+        res.json({
+            status: "FAILED",
+            message: "Password must contain at least one uppercase letter"
+        });
+    } else if(!/[0-9]/.test(password)){
+        res.json({
+            status: "FAILED",
+            message: "Password must contain at least one number"
+        });
+    } else if(!/[!@#$%^&*(),.?":{}|<>]/.test(password)){
+        res.json({
+            status: "FAILED",
+            message: "Password must contain at least one special character"
+        })
     }else{
         // check if user exists
         User.find({email}).then(result =>{
@@ -135,7 +150,7 @@ router.post('/signup', upload.single('profilePicture'), (req, res) => {
             }
         }).catch(err =>{
             console.log(err);
-            res.json({
+            res.status(500).json({
                 status: "FAILED",
                 message: "an error occurred while checking for existing user"
             })
@@ -159,7 +174,7 @@ router.get('/verify/:token', (req, res) => {
             res.json({ status: "FAILED", message: "Error verifying email" });
         });
     }).catch(err => {
-        res.json({ status: "FAILED", message: "Error fetching user" });
+        res.status(500).json({ status: "FAILED", message: "Error fetching user" });
     });
 });
 
@@ -303,6 +318,28 @@ router.post('/reset-password/:token', (req, res) => {
         return res.json({
             status: "failed",
             message: "Please provide a new password."
+        });
+    }
+
+    if (newPassword.length < 8) {
+        return res.json({
+            status: "failed",
+            message: "Password is too short. It must be at least 8 characters long."
+        });
+    } else if (!/[A-Z]/.test(newPassword)) {
+        return res.json({
+            status: "failed",
+            message: "Password must contain at least one uppercase letter."
+        });
+    } else if (!/[0-9]/.test(newPassword)) {
+        return res.json({
+            status: "failed",
+            message: "Password must contain at least one number."
+        });
+    } else if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+        return res.json({
+            status: "failed",
+            message: "Password must contain at least one special character."
         });
     }
 

@@ -518,7 +518,6 @@ router.get('/feed', verifyToken, async (req, res) => {
             return res.status(404).json({ message: "User not found." });
         }
 
-        // Find all friendships where the current user is involved and the friend is not deactivated
         const friendships = await Friendship.find({
             $or: [
                 { user1: currentUserId, status: 'accepted' },
@@ -533,16 +532,15 @@ router.get('/feed', verifyToken, async (req, res) => {
         // Get the list of active friends' IDs
         const friendIds = friendships.map(friendship => {
             if (friendship.user1 && friendship.user1._id.toString() === currentUserId) {
-                return friendship.user2._id;
+                return friendship.user2 ? friendship.user2._id : null;
             } else if (friendship.user2 && friendship.user2._id.toString() === currentUserId) {
-                return friendship.user1._id;
+                return friendship.user1 ? friendship.user1._id : null;
             }
             return null;
         }).filter(id => id !== null);
 
-
-         // If there are no friends, return 0 posts
-         if (friendIds.length === 0) {
+        // If there are no friends, return 0 posts
+        if (friendIds.length === 0) {
             return res.status(200).json({ status: "SUCCESS", data: [] });
         }
 
@@ -552,18 +550,22 @@ router.get('/feed', verifyToken, async (req, res) => {
             privacy: { $in: ['public', 'friends'] }
         }).sort({ createdAt: -1 })
           .populate('userId', 'name email')
-          .populate('likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes');
+          .populate({
+              path: 'likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes',
+              match: { deactivated: { $ne: true } },
+              select: 'name email'
+          });
 
         posts = posts.map(post => {
             post.likes = post.likes.filter(user => user !== null);
             post.dislikes = post.dislikes.filter(user => user !== null);
             post.comments = post.comments
-                .filter(comment => comment.postedBy !== null) 
+                .filter(comment => comment.postedBy !== null)
                 .map(comment => {
                     comment.likes = comment.likes.filter(user => user !== null);
                     comment.dislikes = comment.dislikes.filter(user => user !== null);
                     comment.replies = comment.replies
-                        .filter(reply => reply.postedBy !== null) 
+                        .filter(reply => reply.postedBy !== null)
                         .map(reply => {
                             reply.likes = reply.likes.filter(user => user !== null);
                             reply.dislikes = reply.dislikes.filter(user => user !== null);

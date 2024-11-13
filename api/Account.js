@@ -5,6 +5,7 @@ const Post = require('./../models/Post');
 const Friendship = require('./../models/Friendship');
 const verifyToken = require('./../middleware/verifyToken'); 
 const multer = require('multer');
+const bcrypt = require('bcrypt');
 
 // Multer setup for file uploads
 const storage = multer.diskStorage({
@@ -190,6 +191,66 @@ router.delete('/deleteAccount', verifyToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Error deleting the account and associated data." });
+    }
+});
+
+router.post('/change-password', verifyToken, async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const currentUserId = req.user.userId;
+
+    if(!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "old password and new password must be provided" });
+    }
+
+    if (typeof newPassword !== 'string') {
+        return res.status(400).json({ message: 'Invalid input. Please provide a valid new password with at least 8 characters.' });
+    }
+
+    if (newPassword.length < 8) {
+        return res.json({
+            status: "failed",
+            message: "Password is too short. It must be at least 8 characters long."
+        });
+    } else if (!/[A-Z]/.test(newPassword)) {
+        return res.json({
+            status: "failed",
+            message: "Password must contain at least one uppercase letter."
+        });
+    } else if (!/[0-9]/.test(newPassword)) {
+        return res.json({
+            status: "failed",
+            message: "Password must contain at least one number."
+        });
+    } else if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+        return res.json({
+            status: "failed",
+            message: "Password must contain at least one special character."
+        });
+    }
+
+    try {
+        const user = await User.findById(currentUserId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Current password is incorrect.' });
+        }
+
+        return bcrypt.hash(newPassword, 10).then(hashedPassword => {
+            user.password = hashedPassword;
+            return user.save();
+        }).then(() => {
+            res.status(200).json({ message: 'Password updated successfully.' });
+        }).catch(err => {
+            console.error(err);
+            res.status(500).json({ message: 'Error updating password.' });
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error updating password.' });
     }
 });
 
