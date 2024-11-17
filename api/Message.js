@@ -15,8 +15,9 @@ router.get("/:id", verifyToken, async (req, res) => {
         const chat = await Chat.findOne({
             participants: {$all: [senderId, userToChatId]},
         }).populate("messages");
-        
-        res.status(200).json(chat.messages);
+        if(!chat) return res.status(200).json([]);
+        const messages = chat.messages;
+        res.status(200).json(messages);
     } catch (error) {
         console.log("error in get messages: ", error.message);
         res.status(500).json({ error: "internal server error" });
