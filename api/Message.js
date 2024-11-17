@@ -3,27 +3,47 @@ const router = express.Router();
 const verifyToken = require('../middleware/verifyToken');
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
+const mongoose = require('mongoose');
 
-router.post("/send/:id", verifyToken, async(req,res) => {
-    try{
-        const{message} = req.body;
-        const{id: receiverId} = req.params;
+//get chat and messages between current user and another user
+router.get("/:id", verifyToken, async (req, res) => {
+    try {
+
+        const { id: userToChatId } = req.params;
         const senderId = req.user.userId;
 
-        if(!senderId){
+        const chat = await Chat.findOne({
+            participants: {$all: [senderId, userToChatId]},
+        }).populate("messages");
+        
+        res.status(200).json(chat.messages);
+    } catch (error) {
+        console.log("error in get messages: ", error.message);
+        res.status(500).json({ error: "internal server error" });
+    }
+})
+
+//send a message to a user
+router.post("/send/:id", verifyToken, async (req, res) => {
+    try {
+        const { message } = req.body;
+        const { id: receiverId } = req.params;
+        const senderId = req.user.userId;
+
+        if (!senderId) {
             console.log('no sender id');
         }
 
-        if(senderId==receiverId){
+        if (senderId == receiverId) {
             console.log('cant send message to yourself');
             return res.status(401).json("cannot message yourself");
         }
 
         let chat = await Chat.findOne({
-            participants: {$all: [senderId, receiverId]},
+            participants: { $all: [senderId, receiverId] },
         })
 
-        if(!chat){
+        if (!chat) {
             chat = await Chat.create({
                 participants: [senderId, receiverId],
             })
@@ -35,18 +55,21 @@ router.post("/send/:id", verifyToken, async(req,res) => {
             message: message,
         })
 
-        if(newMessage){
+        if (newMessage) {
             chat.messages.push(newMessage._id);
         }
 
-        await chat.save();
-        await newMessage.save();
+        //socketio will go here
+
+        // await chat.save();
+        // await newMessage.save();
+        await Promise.all([chat.save(), newMessage.save()]);
 
         res.status(201).json(newMessage);
 
-    }catch(error){
+    } catch (error) {
         console.log("error in send message: ", error.message);
-        res.status(500).json({error:"internal server error"});
+        res.status(500).json({ error: "internal server error" });
     }
 })
 
