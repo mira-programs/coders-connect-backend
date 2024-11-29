@@ -797,7 +797,7 @@ router.get('/feed', verifyToken, async (req, res) => {
             userId: { $in: friendIds },
             privacy: { $in: ['public', 'friends'] }
         }).sort({ createdAt: -1 })
-          .populate('userId', 'name email')
+          .populate('userId', 'firstName lastName email')
           .populate({
               path: 'likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes',
               match: { deactivated: { $ne: true } },
@@ -805,6 +805,10 @@ router.get('/feed', verifyToken, async (req, res) => {
           });
 
         posts = posts.map(post => {
+            //image for the post with url that refers to the backend folder correctly
+            if (post.image) {
+                post.image = `${req.protocol}://${req.get('host')}${post.image.startsWith('/') ? '' : '/'}${post.image}`;
+            }
             post.likes = post.likes.filter(user => user !== null);
             post.dislikes = post.dislikes.filter(user => user !== null);
             post.comments = post.comments
