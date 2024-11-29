@@ -9,7 +9,7 @@ const MessageRouter = require('./api/Message');
 
 const express = require('express'); 
 const cors = require('cors');
-const app = express();
+const app = require('./socket/socket.js');
 const port = 3000;
 
 app.use(express.json());

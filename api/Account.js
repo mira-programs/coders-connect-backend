@@ -18,6 +18,37 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+router.get('/profile', verifyToken, async (req, res) => {
+    const currentUserId = req.user.userId; // Extract userId from the token
+
+    try {
+        // Fetch the user by ID, excluding sensitive information like password
+        const user = await User.findById(currentUserId).select('-password');
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        const profilePictureUrl = `${req.protocol}://${req.get('host')}${user.profilePicture.startsWith('/') ? '' : '/'}${user.profilePicture}`;
+        res.status(200).json({
+            message: 'User profile fetched successfully.',
+            profile: {
+                username: user.username,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                bio: user.bio,
+                occupation: user.occupation,
+                profilePicture: profilePictureUrl,
+                createdAt: user.createdAt
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error fetching user profile.' });
+    }
+});
+
 router.post('/update-bio', verifyToken, async (req, res) => {
     const { bio } = req.body;
     const currentUserId = req.user.userId; 
