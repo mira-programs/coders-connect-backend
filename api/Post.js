@@ -36,6 +36,8 @@ router.post('/create', verifyToken, upload.single('media'), async (req, res) => 
             media,
             privacy
         });
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { post_count: 1 } });
         
         await newPost.save();
         res.status(200).json({ status: "SUCCESS", message: "Post created successfully", data: newPost });
@@ -66,6 +68,8 @@ router.delete('/delete-post', verifyToken, async (req, res) => {
         if (!deletedPost) {
             return res.status(500).json({ message: "Error deleting post" });
         }
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { post_count: -1 } });
 
         return res.status(200).json({ message: "Post deleted successfully" });
 
@@ -192,6 +196,9 @@ router.post('/like-post', verifyToken, async (req, res) => {
         }
 
         await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: 1 } });
+
         res.status(200).json({
             message: "Post liked successfully",
             likesCount: post.likes.length,
@@ -199,6 +206,46 @@ router.post('/like-post', verifyToken, async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ message: "Error liking post", error: err });
+    }
+});
+
+// Route to remove a like from a post
+router.post('/unlike-post', verifyToken, async (req, res) => {
+    const { postId } = req.body;
+
+    if (!postId) {
+        return res.status(400).json({ message: "Post ID is required" });
+    }
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        // Check if the user has already liked the post
+        if (post.likes.includes(req.user.userId)) {
+            // If user has liked the post, remove the like
+            post.likes.pull(req.user.userId);
+        }
+
+        // Check if the user has already disliked the post
+        if (post.dislikes.includes(req.user.userId)) {
+            // If user has disliked the post, remove the like
+            post.dislikes.pull(req.user.userId);
+        }
+
+        await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: -1 } });
+
+        res.status(200).json({
+            message: "Like removed successfully",
+            likesCount: post.likes.length,
+            dislikesCount: post.dislikes.length
+        });
+    } catch (err) {
+        res.status(500).json({ message: "Error removing like", error: err });
     }
 });
 
@@ -225,6 +272,9 @@ router.post('/dislike-post', verifyToken, async (req, res) => {
         }
 
         await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: 1 } });
+
         res.status(200).json({
             message: "Post disliked successfully",
             likesCount: post.likes.length,
@@ -257,11 +307,53 @@ router.post('/comment-post', verifyToken, async (req, res) => {
         });
 
         await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: 1 } });
+
         res.status(200).json({ message: "Comment added successfully", data: post });
     } catch (err) {
         res.status(500).json({ message: "Error adding comment", error: err.message });
     }
 });
+
+// Route to delete a comment from a post
+router.delete('/delete-comment', verifyToken, async (req, res) => {
+    const { postId, commentId } = req.body;
+
+    if (!postId || !commentId) {
+        return res.status(400).json({ message: "Post ID and comment ID are required" });
+    }
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        // Find the comment
+        const comment = post.comments.id(commentId);
+        if (!comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+
+        // Check if the user who is requesting is the same as the user who wrote the comment
+        if (comment.postedBy.toString() !== req.user.userId) {
+            return res.status(403).json({ message: "You are not authorized to delete this comment" });
+        }
+
+        // Remove the comment
+        comment.remove();
+
+        await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: -1 } });
+
+        res.status(200).json({ message: "Comment deleted successfully", data: post });
+    } catch (err) {
+        res.status(500).json({ message: "Error deleting comment", error: err.message });
+    }
+});
+
 
 // Route to edit a post
 router.put('/edit-post', verifyToken, upload.single('media'), async (req, res) => {
@@ -332,6 +424,9 @@ router.post('/like-comment', verifyToken, async (req, res) => {
         }
 
         await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: 1 } });
+
         res.status(200).json({
             message: "Comment liked successfully",
             likesCount: comment.likes.length,
@@ -339,6 +434,52 @@ router.post('/like-comment', verifyToken, async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ message: "Error liking comment", error: err });
+    }
+});
+
+// Route to remove a like or dislike from a comment
+router.post('/unreact-comment', verifyToken, async (req, res) => {
+    const { postId, commentId } = req.body;
+
+    if (!postId || !commentId) {
+        return res.status(400).json({ message: "Post ID and comment ID are required" });
+    }
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        // Find the comment
+        const comment = post.comments.id(commentId);
+        if (!comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+
+        // Check if the user has already liked the comment
+        if (comment.likes.includes(req.user.userId)) {
+            // If user has liked the comment, remove the like
+            comment.likes.pull(req.user.userId);
+        }
+
+        // Check if the user has already disliked the comment
+        if (comment.dislikes.includes(req.user.userId)) {
+            // If user has disliked the comment, remove the dislike
+            comment.dislikes.pull(req.user.userId);
+        }
+
+        await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: -1 } });
+
+        res.status(200).json({
+            message: "Reaction removed successfully",
+            likesCount: comment.likes.length,
+            dislikesCount: comment.dislikes.length
+        });
+    } catch (err) {
+        res.status(500).json({ message: "Error removing reaction", error: err.message });
     }
 });
 
@@ -373,6 +514,9 @@ router.post('/dislike-comment', verifyToken, async (req, res) => {
         }
 
         await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: 1 } });
+
         res.status(200).json({
             message: "Comment disliked successfully",
             likesCount: comment.likes.length,
@@ -410,6 +554,9 @@ router.post('/comment-reply', verifyToken, async (req, res) => {
         comment.replies.push(newReply);
 
         await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: 1 } });
+
         res.status(200).json({
             message: "Reply added successfully",
             repliesCount: comment.replies.length,
@@ -419,6 +566,51 @@ router.post('/comment-reply', verifyToken, async (req, res) => {
     } catch (err) {
         console.log(err);
         res.status(500).json({ message: "Error adding reply", error: err });
+    }
+});
+
+// Route to delete a reply to a comment
+router.delete('/delete-reply', verifyToken, async (req, res) => {
+    const { postId, commentId, replyId } = req.body;
+
+    if (!postId || !commentId || !replyId) {
+        return res.status(400).json({ message: "Post ID, comment ID, and reply ID are required" });
+    }
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        const comment = post.comments.id(commentId);
+        if (!comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+
+        const reply = comment.replies.id(replyId);
+        if (!reply) {
+            return res.status(404).json({ message: "Reply not found" });
+        }
+
+        // Check if the user who is requesting is the same as the user who wrote the reply
+        if (reply.postedBy.toString() !== req.user.userId) {
+            return res.status(403).json({ message: "You are not authorized to delete this reply" });
+        }
+
+        // Remove the reply
+        reply.remove();
+
+        await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: -1 } });
+
+        res.status(200).json({
+            message: "Reply deleted successfully",
+            repliesCount: comment.replies.length
+        });
+    } catch (err) {
+        res.status(500).json({ message: "Error deleting reply", error: err.message });
     }
 });
 
@@ -455,6 +647,9 @@ router.post('/like-reply', verifyToken, async (req, res) => {
         }
 
         await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: 1 } });
+
         res.status(200).json({
             message: "Reply liked successfully",
             likesCount: reply.likes.length,
@@ -462,6 +657,56 @@ router.post('/like-reply', verifyToken, async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ message: "Error liking reply", error: err });
+    }
+});
+
+// Route to remove a like or dislike from a reply on a comment
+router.post('/unreact-reply', verifyToken, async (req, res) => {
+    const { postId, commentId, replyId } = req.body;
+
+    if (!postId || !commentId || !replyId) {
+        return res.status(400).json({ message: "Post ID, Comment ID, and Reply ID are required" });
+    }
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: "Post not found" });
+        }
+
+        const comment = post.comments.id(commentId);
+        if (!comment) {
+            return res.status(404).json({ message: "Comment not found" });
+        }
+
+        const reply = comment.replies.id(replyId);
+        if (!reply) {
+            return res.status(404).json({ message: "Reply not found" });
+        }
+
+        // Check if the user has already liked the reply
+        if (reply.likes.includes(req.user.userId)) {
+            // If user has liked the reply, remove the like
+            reply.likes.pull(req.user.userId);
+        }
+
+        // Check if the user has already disliked the reply
+        if (reply.dislikes.includes(req.user.userId)) {
+            // If user has disliked the reply, remove the dislike
+            reply.dislikes.pull(req.user.userId);
+        }
+
+        await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: -1 } });
+
+        res.status(200).json({
+            message: "Reaction removed successfully",
+            likesCount: reply.likes.length,
+            dislikesCount: reply.dislikes.length
+        });
+    } catch (err) {
+        res.status(500).json({ message: "Error removing reaction", error: err.message });
     }
 });
 
@@ -498,6 +743,9 @@ router.post('/dislike-reply', verifyToken, async (req, res) => {
         }
 
         await post.save();
+
+        await User.findByIdAndUpdate(req.user.userId, { $inc: { activity: 1 } });
+
         res.status(200).json({
             message: "Reply disliked successfully",
             likesCount: reply.likes.length,

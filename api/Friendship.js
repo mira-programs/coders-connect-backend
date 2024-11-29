@@ -258,22 +258,12 @@ router.get('/top-contributor', verifyToken, async (req, res) => {
         );
 
         // Aggregate posts count for each friend
-        const topContributor = await Post.aggregate([
-            { $match: { userId: { $in: friendIds } } },
-            { $group: { _id: "$userId", postCount: { $sum: 1 } } },
-            { $sort: { postCount: -1 } },
-            { $limit: 1 }, // Limit to the top contributor
-            { $lookup: {
-                from: 'users',
-                localField: '_id',
-                foreignField: '_id',
-                as: 'user'
-            }},
-            { $unwind: "$user" },
-            { $project: { _id: 0, postCount: 1, user: "$user" } }
-        ]);
+        const topContributors = await User.find({ _id: { $in: friendIds } })
+            .sort({ post_count: -1 })
+            .limit(3)
+            .select('username firstName lastName profilePicture'); 
 
-        res.status(200).json(topContributor[0] || { message: "No contributors found." });
+        res.status(200).json(topContributors || { message: "No contributors found." });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "An error occurred while fetching the top contributor." });
@@ -304,30 +294,12 @@ router.get('/most-active-friend', verifyToken, async (req, res) => {
             f.user1._id.toString() === currentUserId ? f.user2._id : f.user1._id
         );
 
-        // Aggregate likes, dislikes, and comments count for each friend
-        const mostActiveFriend = await Post.aggregate([
-            { $group: {
-                _id: "$userId",
-                totalLikes: { $sum: { $cond: { if: { $isArray: "$likes" }, then: { $size: "$likes" }, else: 0 } } },
-                totalDislikes: { $sum: { $cond: { if: { $isArray: "$dislikes" }, then: { $size: "$dislikes" }, else: 0 } } },
-                totalComments: { $sum: { $cond: { if: { $isArray: "$comments" }, then: { $size: "$comments" }, else: 0 } } }
-            }},
-            { $addFields: {
-                totalActivity: { $sum: ["$totalLikes", "$totalDislikes", "$totalComments"] }
-            }},
-            { $sort: { totalActivity: -1 } },
-            { $limit: 1 }, // Limit to the most active friend
-            { $lookup: {
-                from: 'users',
-                localField: '_id',
-                foreignField: '_id',
-                as: 'user'
-            }},
-            { $unwind: "$user" },
-            { $project: { _id: 0, totalActivity: 1, user: "$user" } }
-        ]);
+        const mostActiveFriend = await User.find({ _id: { $in: friendIds } })
+            .sort({ activity: -1 })
+            .limit(1)
+            .select('username firstName lastName profilePicture'); 
 
-        res.status(200).json(mostActiveFriend[0] || { message: "No active friends found." });
+        res.status(200).json(mostActiveFriend || { message: "No active friends found." });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "An error occurred while fetching the most active friend." });
@@ -349,8 +321,6 @@ router.get('/suggest-friends', verifyToken, async (req, res) => {
             select: 'username email deactivated'
         });
 
-        //console.log('Friendships:', friendships);
-
         const activeFriendships = friendships.filter(f => 
             (f.user1._id.toString() === currentUserId && !f.user2.deactivated) ||
             (f.user2._id.toString() === currentUserId && !f.user1.deactivated)
@@ -359,92 +329,50 @@ router.get('/suggest-friends', verifyToken, async (req, res) => {
         const friendIds = activeFriendships.map(f => 
             f.user1._id.toString() === currentUserId ? f.user2._id : f.user1._id
         );
-        //console.log('Friend IDs:', friendIds);
 
-        const mostActiveFriends = await Post.aggregate([
-            { $group: {
-                _id: "$userId",
-                totalLikes: { $sum: { $cond: { if: { $isArray: "$likes" }, then: { $size: "$likes" }, else: 0 } } },
-                totalDislikes: { $sum: { $cond: { if: { $isArray: "$dislikes" }, then: { $size: "$dislikes" }, else: 0 } } },
-                totalComments: { $sum: { $cond: { if: { $isArray: "$comments" }, then: { $size: "$comments" }, else: 0 } } }
-            }},
-            { $addFields: {
-                totalActivity: { $sum: ["$totalLikes", "$totalDislikes", "$totalComments"] }
-            }},
-            { $sort: { totalActivity: -1 } },
-            { $limit: 3 },
-            { $project: { _id: 1 } }
-        ]);
+        // Step 2: Find the 3 most active friends of each of the 3 most active friends
+        const mostActiveFriends = await User.find({ _id: { $in: friendIds } })
+            .sort({ activity: -1 })
+            .limit(3);
 
-        //console.log('Most Active Friends:', mostActiveFriends);
-
-        const mostActiveFriendIds = mostActiveFriends.map(f => f._id);
-
-        let suggestions = [];
-        for (const friendId of mostActiveFriendIds) {
-            const friendFriendships = await Friendship.find({
+        const secondDegreeFriendIds = [];
+        for (const friend of mostActiveFriends) {
+            const secondDegreeFriendships = await Friendship.find({
                 $or: [
-                    { user1: friendId, status: 'accepted' },
-                    { user2: friendId, status: 'accepted' }
+                    { user1: friend._id, status: 'accepted' },
+                    { user2: friend._id, status: 'accepted' }
                 ]
             }).populate({
                 path: 'user1 user2',
                 select: 'username email deactivated'
             });
 
-            //console.log(`Friendships of Friend ${friendId}:`, friendFriendships);
-
-            const activeFriendships = friendFriendships.filter(f => 
-                (f.user1._id.toString() === currentUserId && !f.user2.deactivated) ||
-                (f.user2._id.toString() === currentUserId && !f.user1.deactivated)
-            );
-    
-            const friendFriendIds = activeFriendships.map(f => 
-                f.user1._id.toString() === currentUserId ? f.user2._id : f.user1._id
+            const activeSecondDegreeFriendships = secondDegreeFriendships.filter(f => 
+                (f.user1._id.toString() === friend._id.toString() && !f.user2.deactivated) ||
+                (f.user2._id.toString() === friend._id.toString() && !f.user1.deactivated)
             );
 
-            //console.log(`Friend IDs of Friend ${friendId}:`, friendFriendIds);
+            const secondDegreeIds = activeSecondDegreeFriendships.map(f => 
+                f.user1._id.toString() === friend._id.toString() ? f.user2._id : f.user1._id
+            );
 
-            const activeFriendsOfFriend = await Post.aggregate([
-                { $group: {
-                    _id: "$userId",
-                    totalLikes: { $sum: { $cond: { if: { $isArray: "$likes" }, then: { $size: "$likes" }, else: 0 } } },
-                    totalDislikes: { $sum: { $cond: { if: { $isArray: "$dislikes" }, then: { $size: "$dislikes" }, else: 0 } } },
-                    totalComments: { $sum: { $cond: { if: { $isArray: "$comments" }, then: { $size: "$comments" }, else: 0 } } }
-                }},
-                { $addFields: {
-                    totalActivity: { $sum: ["$totalLikes", "$totalDislikes", "$totalComments"] }
-                }},
-                { $sort: { totalActivity: -1 } },
-                { $limit: 3 },
-                { $project: { _id: 1 } }
-            ]);
-
-            //console.log(`Active Friends of Friend ${friendId}:`, activeFriendsOfFriend);
-
-            suggestions = suggestions.concat(activeFriendsOfFriend.map(f => f._id));
+            secondDegreeFriendIds.push(...secondDegreeIds);
         }
 
-        const uniqueSuggestions = [...new Set(suggestions)]
-            .filter(id => !friendIds.includes(id.toString()) && id.toString() !== currentUserId);
+        const mostActiveSecondDegreeFriends = await User.find({ _id: { $in: secondDegreeFriendIds } })
+            .sort({ likes_count: -1, comments_count: -1 }) // Sorting based on likes and comments
+            .limit(9);
 
-        //console.log('Unique Suggestions:', uniqueSuggestions);
+        // Step 4: Filter out friends who are already friends with the current user
+        const uniqueSuggestions = mostActiveSecondDegreeFriends.filter(friend => 
+            !friendIds.includes(friend._id.toString()) && friend._id.toString() !== currentUserId
+        );
 
-        const topSuggestions = uniqueSuggestions.slice(0, 9);
-
-        const suggestedFriends = await User.find({ _id: { $in: topSuggestions } });
-
-        const result = suggestedFriends.map(user => ({
-            user: user,
-            totalActivity: 0
-        }));
-
-        res.status(200).json(result);
+        res.status(200).json(uniqueSuggestions);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "An error occurred while fetching friend suggestions." });
     }
 });
-
 
 module.exports = router;

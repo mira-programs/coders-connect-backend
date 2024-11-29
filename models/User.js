@@ -59,6 +59,16 @@ const UserSchema = new Schema({
     deactivated: {
         type: Boolean,
         default: false
+    },
+    
+    post_count: {
+        type: Number,
+        default: 0
+    },
+
+    activity: {
+        type: Number,
+        default: 0
     }
 })
 const User = mongoose.model('User', UserSchema);
