@@ -4,7 +4,7 @@ const multer = require('multer');
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Friendship = require('../models/Friendship');
-const verifyToken = require('../middleware/verifyToken');
+const {verifyToken} = require('../middleware/verifyToken');
 
 // Multer setup for file uploads
 const storage = multer.diskStorage({
@@ -774,7 +774,7 @@ router.get('/feed', verifyToken, async (req, res) => {
         }).populate({
             path: 'user1 user2',
             match: { deactivated: { $ne: true } },
-            select: 'name email'
+            select: 'username email'
         });
 
         // Get the list of active friends' IDs
@@ -797,11 +797,11 @@ router.get('/feed', verifyToken, async (req, res) => {
             userId: { $in: friendIds },
             privacy: { $in: ['public', 'friends'] }
         }).sort({ createdAt: -1 })
-          .populate('userId', 'name email')
+          .populate('userId', 'username email')
           .populate({
               path: 'likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes',
               match: { deactivated: { $ne: true } },
-              select: 'name email'
+              select: 'username email'
           });
 
         posts = posts.map(post => {
@@ -828,6 +828,55 @@ router.get('/feed', verifyToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ status: "FAILED", message: "Error retrieving feed posts" });
+    }
+});
+
+// Route to get public posts for the explore page
+router.get('/explore', verifyToken, async (req, res) => {
+    try {
+        // Query public posts where the user is not deactivated, sorted by creation time (most recent first)
+        let posts = await Post.find({
+            privacy: 'public'
+        }).sort({ createdAt: -1 })
+          .populate({
+              path: 'userId',
+              match: { deactivated: { $ne: true } },
+              select: 'username email'
+          })
+          .populate({
+              path: 'likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes',
+              match: { deactivated: { $ne: true } },
+              select: 'username email'
+          });
+
+        // Filter out posts where the user is deactivated
+        posts = posts.filter(post => post.userId !== null);
+
+        // Filter out deactivated users from likes, dislikes, comments, and replies
+        posts = posts.map(post => {
+            post.likes = post.likes.filter(user => user !== null);
+            post.dislikes = post.dislikes.filter(user => user !== null);
+            post.comments = post.comments
+                .filter(comment => comment.postedBy !== null)
+                .map(comment => {
+                    comment.likes = comment.likes.filter(user => user !== null);
+                    comment.dislikes = comment.dislikes.filter(user => user !== null);
+                    comment.replies = comment.replies
+                        .filter(reply => reply.postedBy !== null)
+                        .map(reply => {
+                            reply.likes = reply.likes.filter(user => user !== null);
+                            reply.dislikes = reply.dislikes.filter(user => user !== null);
+                            return reply;
+                        });
+                    return comment;
+                });
+            return post;
+        });
+
+        res.status(200).json({ status: "SUCCESS", data: posts });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ status: "FAILED", message: "Error retrieving explore posts" });
     }
 });
 

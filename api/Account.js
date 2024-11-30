@@ -3,7 +3,7 @@ const router = express.Router();
 const User = require('./../models/User');
 const Post = require('./../models/Post');
 const Friendship = require('./../models/Friendship');
-const verifyToken = require('./../middleware/verifyToken'); 
+const {verifyToken} = require('./../middleware/verifyToken'); 
 const multer = require('multer');
 const bcrypt = require('bcrypt');
 
@@ -124,16 +124,30 @@ router.post('/update-profilepicture', verifyToken, upload.single('profilePicture
 
 router.post('/deactivateAccount', verifyToken, async (req, res) => {
     const currentUserId = req.user.userId;
+    const { userIdToDeactivate } = req.body;
 
     try {
-        const user = await User.findById(currentUserId);
+        const currentUser = await User.findById(currentUserId);
 
-        if (!user) {
+        if (!currentUser) {
             return res.status(404).json({ message: "User not found." });
         }
 
-        user.deactivated = true;
-        await user.save();
+        const targetUserId = currentUser.role === 'admin' && userIdToDeactivate ? userIdToDeactivate : currentUserId;
+
+        // If the current user is not an admin and tries to deactivate another user's account
+        if (currentUser.role !== 'admin' && userIdToDeactivate && userIdToDeactivate !== currentUserId) {
+            return res.status(403).json({ message: "Access denied. You can only deactivate your own account." });
+        }
+
+        // Find the target user
+        const targetUser = await User.findById(targetUserId);
+        if (!targetUser) {
+            return res.status(404).json({ message: "User to deactivate not found." });
+        }
+
+        targetUser.deactivated = true;
+        await targetUser.save();
 
         res.status(200).json({ message: "Account deactivated successfully." });
 
@@ -143,76 +157,90 @@ router.post('/deactivateAccount', verifyToken, async (req, res) => {
     }
 });
 
-
 router.delete('/deleteAccount', verifyToken, async (req, res) => {
     const currentUserId = req.user.userId;
-
-    const user = await User.findById(currentUserId);
-    if (!user) {
-        return res.status(404).json({
-            message: "User not found."
-        });
-    }
+    const { userIdToDelete } = req.body; // Admin can specify the user ID to delete
 
     try {
+
+        // Find the current user
+        const currentUser = await User.findById(currentUserId);
+        if (!currentUser) {
+            return res.status(404).json({ message: "Current user not found." });
+        }
+
+        // Determine the target user ID
+        const targetUserId = currentUser.role === 'admin' && userIdToDelete ? userIdToDelete : currentUserId;
+
+        // If the current user is not an admin and tries to delete another user's account
+        if (currentUser.role !== 'admin' && userIdToDelete && userIdToDelete !== currentUserId) {
+            return res.status(403).json({ message: "Access denied. You can only delete your own account." });
+        }
+        
+        // Find the target user
+        const targetUser = await User.findById(targetUserId);
+        if (!targetUser) {
+            return res.status(404).json({ message: "User to delete not found." });
+        }
+
         // Delete all posts made by the user
-        await Post.deleteMany({ userId: currentUserId });
+        await Post.deleteMany({ userId: targetUserId });
 
         // Delete all friendships involving the user
         await Friendship.deleteMany({
             $or: [
-                { user1: currentUserId },
-                { user2: currentUserId }
+                { user1: targetUserId },
+                { user2: targetUserId }
             ]
         });
 
         //Remove likes and dislikes from posts made by the user
         await Post.updateMany(
-            { likes: currentUserId }, 
-            { $pull: { likes: currentUserId } } 
+            { likes: targetUserId }, 
+            { $pull: { likes: targetUserId } } 
         );
 
         await Post.updateMany(
-            { dislikes: currentUserId }, 
-            { $pull: { dislikes: currentUserId } } 
+            { dislikes: targetUserId }, 
+            { $pull: { dislikes: targetUserId } } 
         );
 
         //Remove comments made by the user
         await Post.updateMany(
-            { 'comments.postedBy': currentUserId }, 
-            { $pull: { comments: { postedBy: currentUserId } } } 
+            { 'comments.postedBy': targetUserId }, 
+            { $pull: { comments: { postedBy: targetUserId } } } 
         );
 
         //Remove likes and dislikes from comments made by the user
         await Post.updateMany(
-            { 'comments.likes': currentUserId }, 
-            { $pull: { 'comments.$[].likes': currentUserId } } 
+            { 'comments.likes': targetUserId }, 
+            { $pull: { 'comments.$[].likes': targetUserId } } 
         );
 
         await Post.updateMany(
-            { 'comments.dislikes': currentUserId },
-            { $pull: { 'comments.$[].dislikes': currentUserId } } 
+            { 'comments.dislikes': targetUserId },
+            { $pull: { 'comments.$[].dislikes': targetUserId } } 
         );
 
          // Remove replies made by the user
          await Post.updateMany(
-            { 'comments.replies.postedBy': currentUserId },
-            { $pull: { 'comments.$[].replies': { postedBy: currentUserId } } }
+            { 'comments.replies.postedBy': targetUserId },
+            { $pull: { 'comments.$[].replies': { postedBy: targetUserId } } }
         );
 
         // Remove likes and dislikes from replies made by the user
         await Post.updateMany(
-            { 'comments.replies.likes': currentUserId },
-            { $pull: { 'comments.$[].replies.$[].likes': currentUserId } }
+            { 'comments.replies.likes': targetUserId },
+            { $pull: { 'comments.$[].replies.$[].likes': targetUserId } }
         );
 
         await Post.updateMany(
-            { 'comments.replies.dislikes': currentUserId },
-            { $pull: { 'comments.$[].replies.$[].dislikes': currentUserId } }
+            { 'comments.replies.dislikes': targetUserId },
+            { $pull: { 'comments.$[].replies.$[].dislikes': targetUserId } }
         );
         
         // Removing the user
-        await User.deleteOne({ _id: currentUserId });
+        await User.deleteOne({ _id: targetUserId });
 
         // Respond with a success message
         res.status(200).json({

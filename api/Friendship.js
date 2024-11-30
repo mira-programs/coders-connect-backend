@@ -3,7 +3,7 @@ const router = express.Router();
 const Friendship = require('../models/Friendship');
 const User = require('../models/User');
 const Post = require('../models/Post');
-const verifyToken = require('./../middleware/verifyToken'); 
+const {verifyToken} = require('./../middleware/verifyToken'); 
 
 router.post('/send-friend-request',verifyToken, async (req, res) => {
     const {userIdToSend} = req.body;
