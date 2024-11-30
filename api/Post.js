@@ -798,7 +798,7 @@ router.get('/feed', verifyToken, async (req, res) => {
             userId: { $in: friendIds },
             privacy: { $in: ['public', 'friends'] }
         }).sort({ createdAt: -1 })
-          .populate('userId', 'firstName lastName email')
+          .populate('userId', 'username email')
           .populate({
               path: 'likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes',
               match: { deactivated: { $ne: true } },
