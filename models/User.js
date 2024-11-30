@@ -71,6 +71,11 @@ const UserSchema = new Schema({
         default: 0
     },
 
+    friend_count: {
+        type: Number,
+        default: 0
+    },
+
     role: {
         type: String,
         enum: ['user', 'admin'],

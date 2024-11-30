@@ -97,6 +97,13 @@ router.post('/accept-friend-request',verifyToken, async (req, res) => {
         friendship.status = 'accepted';
         await friendship.save();
 
+        // Increment the friend count for both users
+        user.friend_count += 1;
+        friend.friend_count += 1;
+
+        await user.save();
+        await friend.save();
+
         res.status(200).json({ message: "Friend request accepted." });
     } catch (err) {
         console.error(err);
@@ -213,6 +220,10 @@ router.post('/unfriend', verifyToken, async (req, res) => {
 
         if (friendship.status === 'accepted') {
             await Friendship.deleteOne({ _id: friendship._id });
+
+            // Decrement the friend count for both users
+            await User.findByIdAndUpdate(currentUserId, { $inc: { friend_count: -1 } });
+            await User.findByIdAndUpdate(userIdToUnfriend, { $inc: { friend_count: -1 } });
             
             return res.status(200).json({
                 status: "SUCCESS",
