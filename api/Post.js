@@ -48,7 +48,7 @@ router.post('/create', verifyToken, upload.single('media'), async (req, res) => 
 });
 
 router.delete('/delete-post', verifyToken, async (req, res) => {
-    const { postId } = req.body;  
+    const { postId } = req.body;
 
     if (!postId) {
         return res.status(400).json({ message: "Post ID is required" });
@@ -60,7 +60,8 @@ router.delete('/delete-post', verifyToken, async (req, res) => {
             return res.status(404).json({ message: "Post not found" });
         }
 
-        if (post.userId.toString() !== req.user.userId) {
+        // Check if the current user is the owner of the post or an admin
+        if (post.userId.toString() !== req.user.userId && req.user.role !== 'admin') {
             return res.status(403).json({ message: "You are not authorized to delete this post" });
         }
 
@@ -69,7 +70,8 @@ router.delete('/delete-post', verifyToken, async (req, res) => {
             return res.status(500).json({ message: "Error deleting post" });
         }
 
-        await User.findByIdAndUpdate(req.user.userId, { $inc: { post_count: -1 } });
+        // Decrement the post count of the user who created the post
+        await User.findByIdAndUpdate(post.userId, { $inc: { post_count: -1 } });
 
         return res.status(200).json({ message: "Post deleted successfully" });
 
@@ -79,7 +81,6 @@ router.delete('/delete-post', verifyToken, async (req, res) => {
         }
     }
 });
-
 
 // Route to get posts based on friendship status and privacy settings
 router.get('/user-posts', verifyToken, async (req, res) => {
@@ -775,7 +776,7 @@ router.get('/feed', verifyToken, async (req, res) => {
         }).populate({
             path: 'user1 user2',
             match: { deactivated: { $ne: true } },
-            select: 'username email'
+            select: 'username email profilePicture'
         });
 
         // Get the list of active friends' IDs
@@ -798,11 +799,11 @@ router.get('/feed', verifyToken, async (req, res) => {
             userId: { $in: friendIds },
             privacy: { $in: ['public', 'friends'] }
         }).sort({ createdAt: -1 })
-          .populate('userId', 'username email')
+          .populate('userId', 'username email profilePicture')
           .populate({
               path: 'likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes',
               match: { deactivated: { $ne: true } },
-              select: 'username email'
+              select: 'username email profilePicture'
           });
 
         posts = posts.map(post => {
@@ -810,6 +811,12 @@ router.get('/feed', verifyToken, async (req, res) => {
             if (post.image) {
                 post.image = `${req.protocol}://${req.get('host')}${post.image.startsWith('/') ? '' : '/'}${post.image}`;
             }
+
+            // Full URL for the profile picture of the user who posted the post
+            if (post.userId && post.userId.profilePicture) {
+                post.userId.profilePicture = `${req.protocol}://${req.get('host')}${post.userId.profilePicture.startsWith('/') ? '' : '/'}${post.userId.profilePicture}`;
+            }
+
             post.likes = post.likes.filter(user => user !== null);
             post.dislikes = post.dislikes.filter(user => user !== null);
             post.comments = post.comments
@@ -846,12 +853,12 @@ router.get('/explore', verifyToken, async (req, res) => {
           .populate({
               path: 'userId',
               match: { deactivated: { $ne: true } },
-              select: 'username email'
+              select: 'username email profilePicture'
           })
           .populate({
               path: 'likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes',
               match: { deactivated: { $ne: true } },
-              select: 'username email'
+              select: 'username email profilePicture'
           });
 
         // Filter out posts where the user is deactivated
@@ -859,6 +866,16 @@ router.get('/explore', verifyToken, async (req, res) => {
 
         // Filter out deactivated users from likes, dislikes, comments, and replies
         posts = posts.map(post => {
+            //image for the post with url that refers to the backend folder correctly
+            if (post.image) {
+                post.image = `${req.protocol}://${req.get('host')}${post.image.startsWith('/') ? '' : '/'}${post.image}`;
+            }
+
+            // Full URL for the profile picture of the user who posted the post
+            if (post.userId && post.userId.profilePicture) {
+                post.userId.profilePicture = `${req.protocol}://${req.get('host')}${post.userId.profilePicture.startsWith('/') ? '' : '/'}${post.userId.profilePicture}`;
+            }
+
             post.likes = post.likes.filter(user => user !== null);
             post.dislikes = post.dislikes.filter(user => user !== null);
             post.comments = post.comments
