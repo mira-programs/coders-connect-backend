@@ -40,7 +40,8 @@ router.get('/profile', verifyToken, async (req, res) => {
                 bio: user.bio,
                 occupation: user.occupation,
                 profilePicture: profilePictureUrl,
-                createdAt: user.createdAt
+                createdAt: user.createdAt,
+                post_count: user.post_count
             }
         });
     } catch (err) {
@@ -48,6 +49,30 @@ router.get('/profile', verifyToken, async (req, res) => {
         res.status(500).json({ message: 'Error fetching user profile.' });
     }
 });
+
+router.post('/update-name', verifyToken, async(req,res) => {
+    const {firstName, lastName} = req.body;
+    const currentUserId = req.user.userId;
+
+    if (firstName.length <= 0 || lastName.length <=0 ){
+        return res.status(400).json({ message: 'Invalid input. Please provide a valid nonempty name.' });
+    }
+    try {
+        const user = await User.findById(currentUserId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        user.firstName = firstName;
+        user.lastName = lastName;
+        await user.save();  
+
+        res.status(200).json({ message: 'Name updated successfully.' });
+    } catch (error) {
+        console.error(err);
+        res.status(500).json({ message: 'Error updating name.' });
+    }
+})
 
 router.post('/update-bio', verifyToken, async (req, res) => {
     const { bio } = req.body;
