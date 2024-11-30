@@ -808,8 +808,8 @@ router.get('/feed', verifyToken, async (req, res) => {
 
         posts = posts.map(post => {
             //image for the post with url that refers to the backend folder correctly
-            if (post.image) {
-                post.image = `${req.protocol}://${req.get('host')}${post.image.startsWith('/') ? '' : '/'}${post.image}`;
+            if (post.media) {
+                post.media = `${req.protocol}://${req.get('host')}${post.media.startsWith('/') ? '' : '/'}${post.media}`;
             }
 
             // Full URL for the profile picture of the user who posted the post
@@ -867,8 +867,8 @@ router.get('/explore', verifyToken, async (req, res) => {
         // Filter out deactivated users from likes, dislikes, comments, and replies
         posts = posts.map(post => {
             //image for the post with url that refers to the backend folder correctly
-            if (post.image) {
-                post.image = `${req.protocol}://${req.get('host')}${post.image.startsWith('/') ? '' : '/'}${post.image}`;
+            if (post.media) {
+                post.media = `${req.protocol}://${req.get('host')}${post.media.startsWith('/') ? '' : '/'}${post.media}`;
             }
 
             // Full URL for the profile picture of the user who posted the post
