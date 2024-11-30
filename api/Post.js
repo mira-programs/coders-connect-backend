@@ -83,11 +83,12 @@ router.delete('/delete-post', verifyToken, async (req, res) => {
 
 // Route to get posts based on friendship status and privacy settings
 router.get('/user-posts', verifyToken, async (req, res) => {
-    const { userId } = req.body;
+    let { userId } = req.body;
     const currentUserId = req.user.userId;
 
     if(!userId){
-        return res.status(400).json({ message: "User ID is required" });
+        userId = currentUserId;
+        //return res.status(400).json({ message: "User ID is required" });
     }
 
     try {
