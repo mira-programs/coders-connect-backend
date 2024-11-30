@@ -83,11 +83,12 @@ router.delete('/delete-post', verifyToken, async (req, res) => {
 
 // Route to get posts based on friendship status and privacy settings
 router.get('/user-posts', verifyToken, async (req, res) => {
-    const { userId } = req.body;
+    let { userId } = req.body;
     const currentUserId = req.user.userId;
 
     if(!userId){
-        return res.status(400).json({ message: "User ID is required" });
+        userId = currentUserId;
+        //return res.status(400).json({ message: "User ID is required" });
     }
 
     try {
@@ -797,7 +798,7 @@ router.get('/feed', verifyToken, async (req, res) => {
             userId: { $in: friendIds },
             privacy: { $in: ['public', 'friends'] }
         }).sort({ createdAt: -1 })
-          .populate('userId', 'username email')
+          .populate('userId', 'firstName lastName email')
           .populate({
               path: 'likes dislikes comments.postedBy comments.likes comments.dislikes comments.replies.postedBy comments.replies.likes comments.replies.dislikes',
               match: { deactivated: { $ne: true } },
@@ -805,6 +806,10 @@ router.get('/feed', verifyToken, async (req, res) => {
           });
 
         posts = posts.map(post => {
+            //image for the post with url that refers to the backend folder correctly
+            if (post.image) {
+                post.image = `${req.protocol}://${req.get('host')}${post.image.startsWith('/') ? '' : '/'}${post.image}`;
+            }
             post.likes = post.likes.filter(user => user !== null);
             post.dislikes = post.dislikes.filter(user => user !== null);
             post.comments = post.comments
