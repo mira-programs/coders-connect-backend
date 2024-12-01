@@ -41,7 +41,8 @@ router.get('/profile', verifyToken, async (req, res) => {
                 occupation: user.occupation,
                 profilePicture: profilePictureUrl,
                 createdAt: user.createdAt,
-                post_count: user.post_count
+                post_count: user.post_count,
+                friend_count: user.friend_count
             }
         });
     } catch (err) {
