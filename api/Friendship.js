@@ -386,4 +386,37 @@ router.get('/suggest-friends', verifyToken, async (req, res) => {
     }
 });
 
+app.get('/users/not-friends', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // Fetch all friendships where the user is involved
+        const friendships = await Friendship.find({
+            $or: [
+                { user1: currentUserId, status: 'accepted' },
+                { user2: currentUserId, status: 'accepted' }
+            ],
+            status: 'accepted'
+        });
+
+        // Extract friend IDs
+        const friendIds = friendships.map(friendship => 
+            friendship.user1.toString() === userId ? friendship.user2 : friendship.user1
+        );
+
+        // Add the user's own ID to the list to exclude themselves
+        friendIds.push(userId);
+
+        // Fetch users that are not in the friend list
+        const usersNotFriends = await User.find({
+            _id: { $nin: friendIds }
+        });
+
+        res.status(200).json(usersNotFriends);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 module.exports = router;
