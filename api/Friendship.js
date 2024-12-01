@@ -386,15 +386,15 @@ router.get('/suggest-friends', verifyToken, async (req, res) => {
     }
 });
 
-app.get('/users/not-friends', verifyToken, async (req, res) => {
+router.get('/users/not-friends', verifyToken, async (req, res) => {
     try {
         const userId = req.user.userId;
 
         // Fetch all friendships where the user is involved
         const friendships = await Friendship.find({
             $or: [
-                { user1: currentUserId, status: 'accepted' },
-                { user2: currentUserId, status: 'accepted' }
+                { user1: userId, status: 'accepted' },
+                { user2: userId, status: 'accepted' }
             ],
             status: 'accepted'
         });
