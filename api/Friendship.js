@@ -159,6 +159,46 @@ router.post('/reject-friend-request', verifyToken, async (req, res) => {
     }
 });
 
+router.get('/pending-friend-requests', verifyToken, async (req, res) => {
+    const currentUserId = req.user.userId; // Extract the logged-in user's ID from the token
+
+    try {
+        // Find all friendships where the logged-in user is the recipient and the status is 'pending'
+        const pendingRequests = await Friendship.find({
+            user2: currentUserId,
+            status: 'pending'
+        }).populate('user1', 'username email profilePicture'); // Populate user1 details
+
+        if (!pendingRequests.length) {
+            return res.status(200).json({
+                message: 'No pending friend requests.',
+                pendingRequests: []
+            });
+        }
+
+        // Format the data
+        const formattedRequests = pendingRequests.map(request => ({
+            id: request._id,
+            fromUser: {
+                id: request.user1._id,
+                username: request.user1.username,
+                email: request.user1.email,
+                profilePicture: `${req.protocol}://${req.get('host')}${request.user1.profilePicture.startsWith('/') ? '' : '/'}${request.user1.profilePicture}`
+            },
+            requestedAt: request.createdAt
+        }));
+
+        res.status(200).json({
+            message: 'Pending friend requests fetched successfully.',
+            pendingRequests: formattedRequests
+        });
+    } catch (error) {
+        console.error('Error fetching pending friend requests:', error.message);
+        res.status(500).json({ message: 'Internal server error.' });
+    }
+});
+
+
 router.get('/get-friends',verifyToken, async (req, res) => {
     const currentUserId = req.user.userId;
 
