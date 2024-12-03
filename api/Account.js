@@ -387,4 +387,81 @@ router.post('/change-password', verifyToken, async (req, res) => {
     }
 });
 
+// API to add/update the user's status
+router.post('/updateStatus', verifyToken, async (req, res) => {
+    const userId = req.user.userId; // Extract user ID from the token
+    const { status } = req.body; // The new status sent in the request body
+
+    try {
+        if (!status || typeof status !== 'string') {
+            return res.status(400).json({ message: 'Invalid or missing status.' });
+        }
+
+        // Update the user's status and the timestamp
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { 
+                status, // Update the status
+                statusChanged: Date.now() // Update the timestamp
+            },
+            { new: true } // Return the updated document
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        res.status(200).json({
+            message: 'Status updated successfully.',
+            updatedStatus: {
+                status: updatedUser.status,
+                statusChanged: updatedUser.statusChanged
+            }
+        });
+    } catch (error) {
+        console.error('Error updating status:', error.message);
+        res.status(500).json({ message: 'Internal server error.' });
+    }
+});
+
+// API to fetch a user's status
+router.get('/status/:userId', verifyToken, async (req, res) => {
+    const { userId } = req.params; // The user ID to fetch the status for
+
+    try {
+        // Fetch the user by ID
+        const user = await User.findById(userId).select('status statusChanged username profilePicture');
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        const currentTime = new Date();
+        const statusTime = new Date(user.statusChanged);
+
+        // Check if the status is still valid (within 24 hours)
+        const diffInHours = Math.abs(currentTime - statusTime) / (1000 * 60 * 60);
+
+        let isStatusValid = diffInHours < 24;
+
+        // Automatically clear status if it's expired
+        if (!isStatusValid) {
+            user.status = '';
+            user.statusChanged = null;
+            await user.save();
+        }
+
+        res.status(200).json({
+            message: 'User status fetched successfully.',
+            status: isStatusValid ? user.status : null, // Return null if status expired
+            statusChanged: isStatusValid ? user.statusChanged : null, // Return null if status expired
+            username: user.username,
+            profilePicture: `${req.protocol}://${req.get('host')}${user.profilePicture.startsWith('/') ? '' : '/'}${user.profilePicture}`
+        });
+    } catch (error) {
+        console.error('Error fetching user status:', error.message);
+        res.status(500).json({ message: 'Internal server error.' });
+    }
+});
+
 module.exports = router;
