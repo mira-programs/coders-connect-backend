@@ -459,4 +459,49 @@ router.get('/users/not-friends', verifyToken, async (req, res) => {
     }
 });
 
+router.get('/search', verifyToken, async (req, res) => {
+    const { query } = req.body; // Extract search query from request query string
+    if (!query) {
+        return res.status(400).json({ message: 'Search query is required.' });
+    }
+
+    try {
+        const userId = req.user.userId;
+
+        // Fetch all friendships where the user is involved
+        const friendships = await Friendship.find({
+            $or: [
+                { user1: userId, status: 'accepted' },
+                { user2: userId, status: 'accepted' }
+            ]
+        });
+
+        // Extract friend IDs
+        const friendIds = friendships.map(friendship =>
+            friendship.user1.toString() === userId ? friendship.user2 : friendship.user1
+        );
+
+        // Add the user's own ID to the list to exclude themselves
+        friendIds.push(userId);
+
+        // Find users that are not friends and match the search query
+        const usersNotFriends = await User.find({
+            _id: { $nin: friendIds },
+            $or: [
+                { username: { $regex: query, $options: 'i' } }, // Case-insensitive match
+                { firstName: { $regex: query, $options: 'i' } },
+                { lastName: { $regex: query, $options: 'i' } }
+            ]
+        }).select('username firstName lastName profilePicture');
+
+        res.status(200).json({
+            message: 'Search results fetched successfully.',
+            results: usersNotFriends
+        });
+    } catch (error) {
+        console.error('Error searching non-friends:', error.message);
+        res.status(500).json({ message: 'Server error.' });
+    }
+});
+
 module.exports = router;
