@@ -453,7 +453,7 @@ router.get('/status/:userId', verifyToken, async (req, res) => {
 
         res.status(200).json({
             message: 'User status fetched successfully.',
-            status: isStatusValid ? user.status : null, // Return null if status expired
+            status: isStatusValid ? user.status : "", // Return null if status expired
             statusChanged: isStatusValid ? user.statusChanged : null, // Return null if status expired
             username: user.username,
             profilePicture: `${req.protocol}://${req.get('host')}${user.profilePicture.startsWith('/') ? '' : '/'}${user.profilePicture}`
