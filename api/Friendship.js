@@ -5,34 +5,37 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const {verifyToken} = require('./../middleware/verifyToken'); 
 
-router.post('/send-friend-request',verifyToken, async (req, res) => {
-    const {userIdToSend} = req.body;
+router.post('/send-friend-request', verifyToken, async (req, res) => {
+    const { usernameToSend } = req.body; // Change to username
 
-    const currentUserId = req.user.userId; 
+    const currentUserId = req.user.userId;
 
-    if (!userIdToSend) {
+    if (!usernameToSend) {
         return res.status(400).json({
             status: "FAILED",
-            message: "User ID to send is required"
+            message: "Username to send is required"
         });
     }
 
-    if (userIdToSend === currentUserId) {
-        return res.status(400).json({ message: "You cannot send a friend request to yourself." });
-    }
-
     try {
-        const user = await User.findById(currentUserId);
-        const friend = await User.findById(userIdToSend);
+        // Fetch the current user and the recipient user by their usernames
+        const currentUser = await User.findById(currentUserId);
+        const friend = await User.findOne({ username: usernameToSend }); // Find by username
 
-        if (!user || !friend) {
+        if (!currentUser || !friend) {
             return res.status(404).json({ message: "User(s) not found." });
         }
 
+        // Prevent sending a friend request to oneself
+        if (currentUser.username === friend.username) {
+            return res.status(400).json({ message: "You cannot send a friend request to yourself." });
+        }
+
+        // Check if a friendship already exists
         const existingFriendship = await Friendship.findOne({
             $or: [
-                { user1: user._id, user2: friend._id },
-                { user1: friend._id, user2: user._id }
+                { user1: currentUser._id, user2: friend._id },
+                { user1: friend._id, user2: currentUser._id }
             ]
         });
 
@@ -40,8 +43,9 @@ router.post('/send-friend-request',verifyToken, async (req, res) => {
             return res.status(400).json({ message: "Friendship request already exists or you're already friends." });
         }
 
+        // Create the new friendship request
         const newFriendship = new Friendship({
-            user1: user._id,
+            user1: currentUser._id,
             user2: friend._id,
             status: 'pending'
         });
