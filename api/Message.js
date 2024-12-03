@@ -6,19 +6,33 @@ const Message = require('../models/Message');
 const User = require('../models/User');
 const mongoose = require('mongoose');
 
-router.get("/getUsersForSidebar",verifyToken, async(req,res) => {
+router.get("/getUsersForSidebar", verifyToken, async (req, res) => {
     try {
         const loggedInUserId = req.user.userId;
 
-        const filteredUsers = await User.find({_id: {$ne: loggedInUserId}}).select("-password") //find all users except logged in user
-        
-        res.status(200).json(filteredUsers);
+        // Find all users except the logged-in user and exclude password
+        const filteredUsers = await User.find({ _id: { $ne: loggedInUserId } })
+            .select("-password");
 
+        // Loop through the filtered users and update the profilePicture URL
+        const usersWithFullPfp = filteredUsers.map(user => {
+            if (user.profilePicture) {
+                // Check if profilePicture is relative and add full URL
+                if (!user.profilePicture.startsWith('http://') && !user.profilePicture.startsWith('https://')) {
+                    user.profilePicture = `${req.protocol}://${req.get('host')}${user.profilePicture.startsWith('/') ? '' : '/'}${user.profilePicture}`;
+                }
+            }
+            return user;
+        });
+
+        // Send the users with the updated profilePicture URLs
+        res.status(200).json(usersWithFullPfp);
     } catch (error) {
-        console.log("error in getusersforsidebar: ", error.message);
-        res.status(500).json({error: "internal server error"});
+        console.log("Error in getUsersForSidebar: ", error.message);
+        res.status(500).json({ error: "Internal server error" });
     }
-})
+});
+
 
 //get chat and messages between current user and another user
 router.get("/:id", verifyToken, async (req, res) => {
