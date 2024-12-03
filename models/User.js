@@ -50,6 +50,11 @@ const UserSchema = new Schema({
         default: "",
     },
 
+    statusChanged: {
+        type: Date,
+        default: Date.now()
+    },
+
     verified: {
         type: Boolean,
         required: true,
