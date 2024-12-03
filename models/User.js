@@ -45,6 +45,11 @@ const UserSchema = new Schema({
         required: true
     },
 
+    status: {
+        type:String,
+        default: "",
+    },
+
     verified: {
         type: Boolean,
         required: true,
@@ -81,7 +86,7 @@ const UserSchema = new Schema({
         enum: ['user', 'admin'],
         default: 'user'
     }
-})
+},{timestamps: true})
 const User = mongoose.model('User', UserSchema);
 
 module.exports = User;

@@ -51,6 +51,54 @@ router.get('/profile', verifyToken, async (req, res) => {
     }
 });
 
+// Route to get another user's profile and check if they are friends
+router.get('/otherProfile/:userId', verifyToken, async (req, res) => {
+    const currentUserId = req.user.userId; // Extract current user ID from token
+    const requestedUserId = req.params.userId; // The user whose profile is being requested
+
+    try {
+        // Fetch the user to get their profile (excluding sensitive info like password)
+        const user = await User.findById(requestedUserId).select('-password');
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        // Check if the current user and requested user are friends
+        const friendship = await Friendship.findOne({
+            $or: [
+                { user1: currentUserId, user2: requestedUserId, status: 'accepted' },
+                { user2: currentUserId, user1: requestedUserId, status: 'accepted' }
+            ]
+        });
+
+        const isFriend = friendship ? true : false;
+
+        // Build the profile picture URL
+        const profilePictureUrl = `${req.protocol}://${req.get('host')}${user.profilePicture.startsWith('/') ? '' : '/'}${user.profilePicture}`;
+
+        // Return the profile data along with the friendship status
+        res.status(200).json({
+            message: 'User profile fetched successfully.',
+            profile: {
+                username: user.username,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                bio: user.bio,
+                occupation: user.occupation,
+                profilePicture: profilePictureUrl,
+                createdAt: user.createdAt,
+                post_count: user.post_count,
+                friend_count: user.friend_count,
+                isFriend: isFriend  // Boolean indicating if they are friends
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error fetching user profile.' });
+    }
+});
+
 router.post('/update-name', verifyToken, async(req,res) => {
     const {firstName, lastName} = req.body;
     const currentUserId = req.user.userId;
