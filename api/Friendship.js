@@ -411,7 +411,7 @@ router.get('/suggest-friends', verifyToken, async (req, res) => {
         }
 
         const mostActiveSecondDegreeFriends = await User.find({ _id: { $in: secondDegreeFriendIds } })
-            .sort({ likes_count: -1, comments_count: -1 }) // Sorting based on likes and comments
+            .sort({ activity:-1 }) // Sorting based on likes and comments
             .limit(9);
 
         // Step 4: Filter out friends who are already friends with the current user
