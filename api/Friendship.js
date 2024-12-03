@@ -484,14 +484,22 @@ router.get('/search', verifyToken, async (req, res) => {
         // Add the user's own ID to the list to exclude themselves
         friendIds.push(userId);
 
+        // Split the query into parts (e.g., "Mira Hamdar" -> ["Mira", "Hamdar"])
+        const queryParts = query.split(' ');
+
+        // Build the search condition
+        const searchConditions = queryParts.map(part => ({
+            $or: [
+                { username: { $regex: part, $options: 'i' } },
+                { firstName: { $regex: part, $options: 'i' } },
+                { lastName: { $regex: part, $options: 'i' } }
+            ]
+        }));
+
         // Find users that are not friends and match the search query
         const usersNotFriends = await User.find({
             _id: { $nin: friendIds },
-            $or: [
-                { username: { $regex: query, $options: 'i' } }, // Case-insensitive match
-                { firstName: { $regex: query, $options: 'i' } },
-                { lastName: { $regex: query, $options: 'i' } }
-            ]
+            $and: searchConditions // Match all parts of the query
         }).select('username firstName lastName profilePicture');
 
         res.status(200).json({
