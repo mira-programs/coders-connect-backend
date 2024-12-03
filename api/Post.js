@@ -873,8 +873,12 @@ router.get('/explore', verifyToken, async (req, res) => {
 
             // Full URL for the profile picture of the user who posted the post
             if (post.userId && post.userId.profilePicture) {
-                post.userId.profilePicture = `${req.protocol}://${req.get('host')}${post.userId.profilePicture.startsWith('/') ? '' : '/'}${post.userId.profilePicture}`;
-            }
+                // Check if the profile picture already has a protocol (http:// or https://)
+                if (!post.userId.profilePicture.startsWith('http://') && !post.userId.profilePicture.startsWith('https://')) {
+                    post.userId.profilePicture = `${req.protocol}://${req.get('host')}${post.userId.profilePicture.startsWith('/') ? '' : '/'}${post.userId.profilePicture}`;
+                }
+                console.log(post.userId.profilePicture);
+            }            
 
             post.likes = post.likes.filter(user => user !== null);
             post.dislikes = post.dislikes.filter(user => user !== null);
